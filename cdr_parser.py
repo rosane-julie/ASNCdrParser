@@ -11,7 +11,7 @@ from pyasn1 import error
 
 
 class CDRParser:
-    """ASN.1 CDR Parser for telecom Call Detail Records"""
+    """SENORA ASN parser for telecom Call Detail Records"""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -38,14 +38,20 @@ class CDRParser:
             file_size = os.path.getsize(filepath)
             self.logger.info(f"Processing file {filepath} of size {file_size} bytes")
 
-            # For files larger than 1MB, use enhanced BCD parsing directly
-            if file_size > 1024 * 1024:  # 1MB
-                self.logger.info("Large file detected - using enhanced BCD parsing")
+            # Very large files are parsed in chunks to avoid memory issues
+            if file_size > 10 * 1024 * 1024:  # >10MB
+                self.logger.info("Large file detected - using chunked parser")
+                return self.parse_large_file(filepath)
+
+            # Medium sized files use the raw binary parser for speed
+            if file_size > 1024 * 1024:  # >1MB
+                self.logger.info("Medium file detected - using enhanced BCD parsing")
                 return self.parse_raw_binary_file(filepath)
-            else:
-                with open(filepath, "rb") as f:
-                    data = f.read()
-                return self.parse_binary_data(data)
+
+            # Small files are loaded entirely in memory
+            with open(filepath, "rb") as f:
+                data = f.read()
+            return self.parse_binary_data(data)
 
         except Exception as e:
             self.logger.error(f"Error reading file {filepath}: {str(e)}")
@@ -54,6 +60,51 @@ class CDRParser:
                 return self.parse_raw_binary_file(filepath)
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
+
+    def parse_file_chunk(self, filepath, start_record=0, max_records=1000, offset=0):
+        """Parse part of a file starting from ``offset`` and ``start_record``.
+
+        Returns ``(records, reached_end, new_offset)``.
+        """
+        records = []
+        chunk_size = 10 * 1024 * 1024  # 10MB
+        record_index = start_record
+        reached_end = False
+        new_offset = offset
+
+        try:
+            with open(filepath, "rb") as f:
+                f.seek(offset)
+                while len(records) < max_records:
+                    chunk_start = f.tell()
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        reached_end = True
+                        break
+
+                    if len(chunk) == chunk_size:
+                        boundary_search = chunk[-1024:]
+                        boundary_pos = -1
+                        for i in range(len(boundary_search) - 1, 0, -1):
+                            if boundary_search[i] in [0x30, 0x31, 0x02, 0x04]:
+                                boundary_pos = len(chunk) - len(boundary_search) + i
+                                break
+                        if boundary_pos > 0:
+                            process_chunk = chunk[:boundary_pos]
+                            f.seek(chunk_start + boundary_pos)
+                            chunk = process_chunk
+
+                    chunk_records = self.parse_binary_data_chunk(chunk, record_index)
+                    records.extend(chunk_records)
+                    record_index += len(chunk_records)
+                    new_offset = f.tell()
+                    if len(records) >= max_records:
+                        break
+
+        except Exception as e:
+            self.logger.error(f"Error processing file chunk: {str(e)}")
+
+        return records, reached_end, new_offset
 
     def parse_binary_data(self, data):
         """Parse binary ASN.1 data and extract CDR records"""
