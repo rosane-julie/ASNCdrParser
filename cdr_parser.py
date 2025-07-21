@@ -11,7 +11,7 @@ from pyasn1 import error
 
 
 class CDRParser:
-    """ASN.1 CDR Parser for telecom Call Detail Records"""
+    """SENORA ASN parser for telecom Call Detail Records"""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
