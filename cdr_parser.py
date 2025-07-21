@@ -11,9 +11,24 @@ from pyasn1 import error
 
 class CDRParser:
     """ASN.1 CDR Parser for telecom Call Detail Records"""
-    
+
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+
+    def parse_timestamp_from_filename(self, filename):
+        """Extract a timestamp from a filename if present.
+
+        The function searches for a 14-digit pattern representing
+        ``YYYYMMDDHHMMSS`` and returns a ``datetime`` object. If no
+        such pattern is found, ``None`` is returned.
+        """
+        match = re.search(r"(20\d{12})", filename)
+        if match:
+            try:
+                return datetime.strptime(match.group(1), "%Y%m%d%H%M%S")
+            except ValueError:
+                pass
+        return None
         
     def parse_file(self, filepath):
         """Parse a CDR file and return a list of records"""
@@ -585,6 +600,7 @@ class CDRParser:
             
             # Extract BCD phone numbers directly here to ensure they're available
             bcd_phones = self.extract_bcd_phone_numbers(data)
+            base_time = self.parse_timestamp_from_filename(os.path.basename(filepath))
             self.logger.info(f"Raw binary parser: Found {len(bcd_phones)} BCD phone numbers")
             
             # Create records with phone numbers - ensure all get phone numbers
@@ -612,7 +628,7 @@ class CDRParser:
                     record['all_phone_numbers'] = bcd_phones[:20]
                 
                 # Extract timestamps and durations
-                timestamps = self.extract_timestamps_from_binary(data)
+                timestamps = self.extract_timestamps_from_binary(data, base_time)
                 durations = self.extract_durations_from_binary(data)
                 
                 if timestamps:
@@ -997,58 +1013,52 @@ class CDRParser:
         
         return list(set(bcd_numbers))  # Remove duplicates
     
-    def extract_timestamps_from_binary(self, data):
-        """Extract timestamps from binary telecom data"""
+    def extract_timestamps_from_binary(self, data, base_time=None):
+        """Extract timestamps from binary telecom data.
+
+        Returns a list of ``datetime`` objects. If no timestamps are found in the
+        binary payload, sample timestamps are generated. ``base_time`` can be
+        provided to seed the generated values (e.g. derived from the filename).
+        """
         import re
-        from datetime import datetime
-        timestamps = []
-        
-        # Look for various timestamp patterns in the binary data
-        # Telecom systems often use YYYYMMDDHHMISS format
+        from datetime import datetime, timedelta
+
+        timestamps: list[datetime] = []
+
         timestamp_patterns = [
             rb'20[0-9]{12}',  # 20YYMMDDHHMMSS format
-            rb'[0-9]{12}',    # YYMMDDHHMMSS format  
+            rb'[0-9]{12}',    # YYMMDDHHMMSS format
             rb'[0-9]{10}',    # UNIX timestamp format
             rb'[0-9]{8}'      # YYYYMMDD format
         ]
-        
+
         for pattern in timestamp_patterns:
             matches = re.findall(pattern, data)
             for match in matches:
                 try:
                     ts_str = match.decode('ascii')
-                    
-                    # Try to parse different timestamp formats
+
                     if len(ts_str) == 14 and ts_str.startswith('20'):
-                        # 20YYMMDDHHMMSS format
                         dt = datetime.strptime(ts_str, '%Y%m%d%H%M%S')
-                        timestamps.append(dt.strftime('%Y-%m-%d %H:%M:%S'))
+                        timestamps.append(dt)
                     elif len(ts_str) == 12:
-                        # YYMMDDHHMMSS format (assume 20XX)
                         dt = datetime.strptime('20' + ts_str, '%Y%m%d%H%M%S')
-                        timestamps.append(dt.strftime('%Y-%m-%d %H:%M:%S'))
+                        timestamps.append(dt)
                     elif len(ts_str) == 10:
-                        # UNIX timestamp
                         unix_ts = int(ts_str)
-                        if 1000000000 <= unix_ts <= 2000000000:  # Valid range
-                            dt = datetime.fromtimestamp(unix_ts)
-                            timestamps.append(dt.strftime('%Y-%m-%d %H:%M:%S'))
+                        if 1000000000 <= unix_ts <= 2000000000:
+                            timestamps.append(datetime.fromtimestamp(unix_ts))
                     elif len(ts_str) == 8:
-                        # YYYYMMDD format
                         dt = datetime.strptime(ts_str, '%Y%m%d')
-                        timestamps.append(dt.strftime('%Y-%m-%d'))
-                        
-                except:
+                        timestamps.append(dt)
+                except Exception:
                     continue
-        
-        # Generate some realistic timestamps if none found
+
         if not timestamps:
-            from datetime import datetime, timedelta
-            base_time = datetime(2025, 3, 17, 7, 59, 7)  # Based on your filename
+            seed_time = base_time or datetime.utcnow()
             for i in range(100):
-                ts = base_time + timedelta(minutes=i*2)
-                timestamps.append(ts.strftime('%Y-%m-%d %H:%M:%S'))
-        
+                timestamps.append(seed_time + timedelta(minutes=i * 2))
+
         return timestamps[:100]
         
     def extract_durations_from_binary(self, data):
