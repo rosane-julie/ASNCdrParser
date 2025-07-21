@@ -1,4 +1,4 @@
-// Main JavaScript file for ASN.1 CDR Parser
+// Main JavaScript file for SENORA ASN
 
 $(document).ready(function() {
     // Initialize DataTables if present
