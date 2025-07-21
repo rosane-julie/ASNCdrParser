@@ -11,6 +11,7 @@ class CDRFile(db.Model):
     parse_status = db.Column(db.String(50), default='pending')  # pending, success, error
     error_message = db.Column(db.Text)
     records_count = db.Column(db.Integer, default=0)
+    parse_offset = db.Column(db.Integer, default=0)
     
     # Relationship to parsed records
     records = db.relationship('CDRRecord', backref='file', lazy=True, cascade='all, delete-orphan')
