@@ -556,7 +556,7 @@ def save_as(file_id):
         )
         records_data = []
         for r in selected_records:
-           data = r.get_raw_data()
+            data = r.get_raw_data()
             if "calling_number" not in data:
                 data["calling_number"] = r.calling_number
             records_data.append(data)
