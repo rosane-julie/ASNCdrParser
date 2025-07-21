@@ -519,7 +519,6 @@ def save_as(file_id):
                 "error",
             )
             return redirect(request.url)
-
         try:
             start_idx = int(request.form.get("start_index", 0))
         except ValueError:
@@ -557,7 +556,7 @@ def save_as(file_id):
         )
         records_data = []
         for r in selected_records:
-            data = r.get_raw_data()
+           data = r.get_raw_data()
             if "calling_number" not in data:
                 data["calling_number"] = r.calling_number
             records_data.append(data)
@@ -574,7 +573,6 @@ def save_as(file_id):
         )
         db.session.add(new_file)
         db.session.commit()
-
         for i, r in enumerate(selected_records):
             new_record = CDRRecord(
                 file_id=new_file.id,
@@ -594,7 +592,6 @@ def save_as(file_id):
         return redirect(url_for("view_results", file_id=new_file.id))
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
-
 
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
