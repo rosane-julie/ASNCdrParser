@@ -2,7 +2,16 @@ import os
 import json
 import logging
 from datetime import datetime
-from flask import render_template, request, redirect, url_for, flash, jsonify, send_file, Response
+from flask import (
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+    send_file,
+    Response,
+)
 from werkzeug.utils import secure_filename
 from app import app, db
 from models import CDRFile, CDRRecord
@@ -11,232 +20,263 @@ import tempfile
 import csv
 import io
 
-ALLOWED_EXTENSIONS = {'dat', 'cdr', 'bin', 'asn1', 'ber', 'der'}
+ALLOWED_EXTENSIONS = {"dat", "cdr", "bin", "asn1", "ber", "der"}
+
 
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/')
+
+@app.route("/")
 def index():
     # Get recent files
     recent_files = CDRFile.query.order_by(CDRFile.upload_time.desc()).limit(10).all()
-    return render_template('index.html', recent_files=recent_files)
+    return render_template("index.html", recent_files=recent_files)
 
-@app.route('/upload', methods=['GET', 'POST'])
+
+@app.route("/upload", methods=["GET", "POST"])
 def upload_file():
-    if request.method == 'POST':
+    if request.method == "POST":
         # Check if file was uploaded
-        if 'file' not in request.files:
-            flash('No file selected', 'error')
+        if "file" not in request.files:
+            flash("No file selected", "error")
             return redirect(request.url)
-        
-        file = request.files['file']
-        if file.filename == '':
-            flash('No file selected', 'error')
+
+        file = request.files["file"]
+        if file.filename == "":
+            flash("No file selected", "error")
             return redirect(request.url)
-        
+
         if file and allowed_file(file.filename):
             try:
                 # Secure the filename
                 original_filename = file.filename
                 filename = secure_filename(file.filename)
-                
+
                 # Save the file
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 file.save(filepath)
-                
+
                 # Get file size
                 file_size = os.path.getsize(filepath)
-                
+
                 # Create database record
                 cdr_file = CDRFile(
                     filename=filename,
                     original_filename=original_filename,
-                    file_size=file_size
+                    file_size=file_size,
                 )
                 db.session.add(cdr_file)
                 db.session.commit()
-                
+
                 # Parse the file
                 parser = CDRParser()
                 try:
                     records = parser.parse_file(filepath)
-                    
+
                     # Save parsed records to database
                     for i, record in enumerate(records):
                         cdr_record = CDRRecord(
                             file_id=cdr_file.id,
                             record_index=i,
-                            record_type=record.get('record_type', 'unknown'),
-                            calling_number=record.get('calling_number'),
-                            called_number=record.get('called_number'),
-                            call_duration=record.get('call_duration'),
-                            start_time=record.get('start_time'),
-                            end_time=record.get('end_time')
+                            record_type=record.get("record_type", "unknown"),
+                            calling_number=record.get("calling_number"),
+                            called_number=record.get("called_number"),
+                            call_duration=record.get("call_duration"),
+                            start_time=record.get("start_time"),
+                            end_time=record.get("end_time"),
                         )
                         cdr_record.set_raw_data(record)
                         db.session.add(cdr_record)
-                    
+
                     cdr_file.records_count = len(records)
-                    cdr_file.parse_status = 'success'
+                    cdr_file.parse_status = "success"
                     db.session.commit()
-                    
-                    flash(f'File uploaded and parsed successfully. {len(records)} records found.', 'success')
-                    return redirect(url_for('view_results', file_id=cdr_file.id))
-                    
+
+                    flash(
+                        f"File uploaded and parsed successfully. {len(records)} records found.",
+                        "success",
+                    )
+                    return redirect(url_for("view_results", file_id=cdr_file.id))
+
                 except Exception as e:
                     logging.error(f"Error parsing file {filename}: {str(e)}")
-                    cdr_file.parse_status = 'error'
+                    cdr_file.parse_status = "error"
                     cdr_file.error_message = str(e)
                     db.session.commit()
-                    flash(f'Error parsing file: {str(e)}', 'error')
-                    return redirect(url_for('view_results', file_id=cdr_file.id))
-                    
+                    flash(f"Error parsing file: {str(e)}", "error")
+                    return redirect(url_for("view_results", file_id=cdr_file.id))
+
             except Exception as e:
                 logging.error(f"Error uploading file: {str(e)}")
-                flash(f'Error uploading file: {str(e)}', 'error')
+                flash(f"Error uploading file: {str(e)}", "error")
                 return redirect(request.url)
         else:
-            flash('Invalid file type. Allowed types: ' + ', '.join(ALLOWED_EXTENSIONS), 'error')
+            flash(
+                "Invalid file type. Allowed types: " + ", ".join(ALLOWED_EXTENSIONS),
+                "error",
+            )
             return redirect(request.url)
-    
-    return render_template('upload.html')
 
-@app.route('/results/<int:file_id>')
+    return render_template("upload.html")
+
+
+@app.route("/results/<int:file_id>")
 def view_results(file_id):
     cdr_file = CDRFile.query.get_or_404(file_id)
-    
+
     # Get pagination parameters
-    page = request.args.get('page', 1, type=int)
+    page = request.args.get("page", 1, type=int)
     per_page = 50
-    
+
     # Get search parameters
-    search_query = request.args.get('search', '')
-    record_type_filter = request.args.get('record_type', '')
-    
+    search_query = request.args.get("search", "")
+    record_type_filter = request.args.get("record_type", "")
+
     # Build query with filters
     query = CDRRecord.query.filter_by(file_id=file_id)
-    
+
     if search_query:
         query = query.filter(
             db.or_(
                 CDRRecord.calling_number.contains(search_query),
-                CDRRecord.called_number.contains(search_query)
+                CDRRecord.called_number.contains(search_query),
             )
         )
-    
+
     if record_type_filter:
         query = query.filter(CDRRecord.record_type == record_type_filter)
-    
-    # Get paginated results
-    records = query.paginate(
-        page=page, 
-        per_page=per_page, 
-        error_out=False
-    )
-    
-    # Get unique record types for filter
-    record_types = db.session.query(CDRRecord.record_type).filter_by(file_id=file_id).distinct().all()
-    record_types = [rt[0] for rt in record_types if rt[0]]
-    
-    return render_template('results.html', 
-                         cdr_file=cdr_file, 
-                         records=records,
-                         record_types=record_types,
-                         search_query=search_query,
-                         record_type_filter=record_type_filter)
 
-@app.route('/export/<int:file_id>/<format>')
+    # Get paginated results
+    records = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    # Get unique record types for filter
+    record_types = (
+        db.session.query(CDRRecord.record_type)
+        .filter_by(file_id=file_id)
+        .distinct()
+        .all()
+    )
+    record_types = [rt[0] for rt in record_types if rt[0]]
+
+    return render_template(
+        "results.html",
+        cdr_file=cdr_file,
+        records=records,
+        record_types=record_types,
+        search_query=search_query,
+        record_type_filter=record_type_filter,
+    )
+
+
+@app.route("/export/<int:file_id>/<format>")
 def export_data(file_id, format):
     cdr_file = CDRFile.query.get_or_404(file_id)
     records = CDRRecord.query.filter_by(file_id=file_id).all()
-    
-    if format == 'json':
+
+    if format == "json":
         # Export as JSON
         data = []
         for record in records:
             data.append(record.get_raw_data())
-        
+
         response = Response(
             json.dumps(data, indent=2, default=str),
-            mimetype='application/json',
-            headers={'Content-Disposition': f'attachment; filename={cdr_file.original_filename}.json'}
+            mimetype="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename={cdr_file.original_filename}.json"
+            },
         )
         return response
-    
-    elif format == 'csv':
+
+    elif format == "csv":
         # Export as CSV
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
         # Write header
-        writer.writerow([
-            'Record Index', 'Record Type', 'Calling Number', 'Called Number',
-            'Call Duration (sec)', 'Start Time', 'End Time'
-        ])
-        
+        writer.writerow(
+            [
+                "Record Index",
+                "Record Type",
+                "Calling Number",
+                "Called Number",
+                "Call Duration (sec)",
+                "Start Time",
+                "End Time",
+            ]
+        )
+
         # Write data
         for record in records:
-            writer.writerow([
-                record.record_index,
-                record.record_type or '',
-                record.calling_number or '',
-                record.called_number or '',
-                record.call_duration or '',
-                record.start_time or '',
-                record.end_time or ''
-            ])
-        
+            writer.writerow(
+                [
+                    record.record_index,
+                    record.record_type or "",
+                    record.calling_number or "",
+                    record.called_number or "",
+                    record.call_duration or "",
+                    record.start_time or "",
+                    record.end_time or "",
+                ]
+            )
+
         output.seek(0)
         response = Response(
             output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={cdr_file.original_filename}.csv'}
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={cdr_file.original_filename}.csv"
+            },
         )
         return response
-    
-    else:
-        flash('Invalid export format', 'error')
-        return redirect(url_for('view_results', file_id=file_id))
 
-@app.route('/record/<int:record_id>')
+    else:
+        flash("Invalid export format", "error")
+        return redirect(url_for("view_results", file_id=file_id))
+
+
+@app.route("/record/<int:record_id>")
 def view_record_details(record_id):
     record = CDRRecord.query.get_or_404(record_id)
     raw_data = record.get_raw_data()
-    
-    return jsonify({
-        'success': True,
-        'record': {
-            'id': record.id,
-            'record_type': record.record_type,
-            'calling_number': record.calling_number,
-            'called_number': record.called_number,
-            'call_duration': record.call_duration,
-            'start_time': str(record.start_time) if record.start_time else None,
-            'end_time': str(record.end_time) if record.end_time else None,
-            'raw_data': raw_data
-        }
-    })
 
-@app.route('/edit/<int:record_id>')
+    return jsonify(
+        {
+            "success": True,
+            "record": {
+                "id": record.id,
+                "record_type": record.record_type,
+                "calling_number": record.calling_number,
+                "called_number": record.called_number,
+                "call_duration": record.call_duration,
+                "start_time": str(record.start_time) if record.start_time else None,
+                "end_time": str(record.end_time) if record.end_time else None,
+                "raw_data": raw_data,
+            },
+        }
+    )
+
+
+@app.route("/edit/<int:record_id>")
 def edit_record(record_id):
     record = CDRRecord.query.get_or_404(record_id)
     cdr_file = record.file
-    return render_template('edit_record.html', record=record, cdr_file=cdr_file)
+    return render_template("edit_record.html", record=record, cdr_file=cdr_file)
 
-@app.route('/edit/<int:record_id>', methods=['POST'])
+
+@app.route("/edit/<int:record_id>", methods=["POST"])
 def update_record(record_id):
     record = CDRRecord.query.get_or_404(record_id)
-    
+
     try:
         # Update basic fields
-        record.record_type = request.form.get('record_type', '').strip()
-        record.calling_number = request.form.get('calling_number', '').strip() or None
-        record.called_number = request.form.get('called_number', '').strip() or None
-        
+        record.record_type = request.form.get("record_type", "").strip()
+        record.calling_number = request.form.get("calling_number", "").strip() or None
+        record.called_number = request.form.get("called_number", "").strip() or None
+
         # Update duration
-        duration_str = request.form.get('call_duration', '').strip()
+        duration_str = request.form.get("call_duration", "").strip()
         if duration_str:
             try:
                 record.call_duration = int(duration_str)
@@ -244,152 +284,218 @@ def update_record(record_id):
                 record.call_duration = None
         else:
             record.call_duration = None
-        
+
         # Update timestamps
-        start_time_str = request.form.get('start_time', '').strip()
+        start_time_str = request.form.get("start_time", "").strip()
         if start_time_str:
             try:
-                record.start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S')
+                record.start_time = datetime.strptime(
+                    start_time_str, "%Y-%m-%d %H:%M:%S"
+                )
             except ValueError:
                 record.start_time = None
         else:
             record.start_time = None
-            
-        end_time_str = request.form.get('end_time', '').strip()
+
+        end_time_str = request.form.get("end_time", "").strip()
         if end_time_str:
             try:
-                record.end_time = datetime.strptime(end_time_str, '%Y-%m-%d %H:%M:%S')
+                record.end_time = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 record.end_time = None
         else:
             record.end_time = None
-        
+
         # Update raw data if provided
-        raw_data_str = request.form.get('raw_data', '').strip()
+        raw_data_str = request.form.get("raw_data", "").strip()
         if raw_data_str:
             try:
                 raw_data = json.loads(raw_data_str)
                 record.set_raw_data(raw_data)
             except json.JSONDecodeError:
-                flash('Invalid JSON format in raw data field', 'error')
-                return redirect(url_for('edit_record', record_id=record_id))
-        
+                flash("Invalid JSON format in raw data field", "error")
+                return redirect(url_for("edit_record", record_id=record_id))
+
         db.session.commit()
-        flash('Record updated successfully', 'success')
-        return redirect(url_for('view_results', file_id=record.file_id))
-        
+
+        # Persist edited numbers back to the uploaded file
+        cdr_file = record.file
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
+        parser = CDRParser()
+        all_records = (
+            CDRRecord.query.filter_by(file_id=cdr_file.id)
+            .order_by(CDRRecord.record_index)
+            .all()
+        )
+        records_data = []
+        for r in all_records:
+            data = r.get_raw_data()
+            if "calling_number" not in data:
+                data["calling_number"] = r.calling_number
+            records_data.append(data)
+
+        parser.save_records_to_file(filepath, records_data)
+
+        flash("Record updated successfully", "success")
+        return redirect(url_for("view_results", file_id=record.file_id))
+
     except Exception as e:
         logging.error(f"Error updating record: {str(e)}")
-        flash(f'Error updating record: {str(e)}', 'error')
-        return redirect(url_for('edit_record', record_id=record_id))
+        flash(f"Error updating record: {str(e)}", "error")
+        return redirect(url_for("edit_record", record_id=record_id))
 
-@app.route('/create_record/<int:file_id>')
+
+@app.route("/create_record/<int:file_id>")
 def create_record_form(file_id):
     cdr_file = CDRFile.query.get_or_404(file_id)
-    return render_template('create_record.html', cdr_file=cdr_file)
+    return render_template("create_record.html", cdr_file=cdr_file)
 
-@app.route('/create_record/<int:file_id>', methods=['POST'])
+
+@app.route("/create_record/<int:file_id>", methods=["POST"])
 def create_record(file_id):
     cdr_file = CDRFile.query.get_or_404(file_id)
-    
+
     try:
         # Get the next record index
-        max_index = db.session.query(db.func.max(CDRRecord.record_index)).filter_by(file_id=file_id).scalar()
+        max_index = (
+            db.session.query(db.func.max(CDRRecord.record_index))
+            .filter_by(file_id=file_id)
+            .scalar()
+        )
         next_index = (max_index or -1) + 1
-        
+
         # Create new record
         record = CDRRecord(
             file_id=file_id,
             record_index=next_index,
-            record_type=request.form.get('record_type', '').strip() or 'manual',
-            calling_number=request.form.get('calling_number', '').strip() or None,
-            called_number=request.form.get('called_number', '').strip() or None
+            record_type=request.form.get("record_type", "").strip() or "manual",
+            calling_number=request.form.get("calling_number", "").strip() or None,
+            called_number=request.form.get("called_number", "").strip() or None,
         )
-        
+
         # Set duration
-        duration_str = request.form.get('call_duration', '').strip()
+        duration_str = request.form.get("call_duration", "").strip()
         if duration_str:
             try:
                 record.call_duration = int(duration_str)
             except ValueError:
                 pass
-        
+
         # Set timestamps
-        start_time_str = request.form.get('start_time', '').strip()
+        start_time_str = request.form.get("start_time", "").strip()
         if start_time_str:
             try:
-                record.start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S')
+                record.start_time = datetime.strptime(
+                    start_time_str, "%Y-%m-%d %H:%M:%S"
+                )
             except ValueError:
                 pass
-                
-        end_time_str = request.form.get('end_time', '').strip()
+
+        end_time_str = request.form.get("end_time", "").strip()
         if end_time_str:
             try:
-                record.end_time = datetime.strptime(end_time_str, '%Y-%m-%d %H:%M:%S')
+                record.end_time = datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
             except ValueError:
                 pass
-        
+
         # Set raw data
-        raw_data_str = request.form.get('raw_data', '').strip()
+        raw_data_str = request.form.get("raw_data", "").strip()
         if raw_data_str:
             try:
                 raw_data = json.loads(raw_data_str)
                 record.set_raw_data(raw_data)
             except json.JSONDecodeError:
-                flash('Invalid JSON format in raw data field', 'error')
-                return redirect(url_for('create_record_form', file_id=file_id))
-        
+                flash("Invalid JSON format in raw data field", "error")
+                return redirect(url_for("create_record_form", file_id=file_id))
+
         db.session.add(record)
-        
+
         # Update file record count
         cdr_file.records_count = CDRRecord.query.filter_by(file_id=file_id).count() + 1
-        
+
         db.session.commit()
-        flash('Record created successfully', 'success')
-        return redirect(url_for('view_results', file_id=file_id))
-        
+
+        # Persist new records back to the uploaded file
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
+        parser = CDRParser()
+        all_records = (
+            CDRRecord.query.filter_by(file_id=cdr_file.id)
+            .order_by(CDRRecord.record_index)
+            .all()
+        )
+        records_data = []
+        for r in all_records:
+            data = r.get_raw_data()
+            if "calling_number" not in data:
+                data["calling_number"] = r.calling_number
+            records_data.append(data)
+        parser.save_records_to_file(filepath, records_data)
+
+        flash("Record created successfully", "success")
+        return redirect(url_for("view_results", file_id=file_id))
+
     except Exception as e:
         logging.error(f"Error creating record: {str(e)}")
-        flash(f'Error creating record: {str(e)}', 'error')
-        return redirect(url_for('create_record_form', file_id=file_id))
+        flash(f"Error creating record: {str(e)}", "error")
+        return redirect(url_for("create_record_form", file_id=file_id))
 
-@app.route('/delete_record/<int:record_id>', methods=['POST'])
+
+@app.route("/delete_record/<int:record_id>", methods=["POST"])
 def delete_record(record_id):
     record = CDRRecord.query.get_or_404(record_id)
     file_id = record.file_id
-    
+
     try:
         db.session.delete(record)
-        
+
         # Update file record count
         cdr_file = CDRFile.query.get(file_id)
         cdr_file.records_count = CDRRecord.query.filter_by(file_id=file_id).count() - 1
-        
+
         db.session.commit()
-        flash('Record deleted successfully', 'success')
+
+        # Persist deletion to the file
+        cdr_file = CDRFile.query.get(file_id)
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
+        parser = CDRParser()
+        all_records = (
+            CDRRecord.query.filter_by(file_id=file_id)
+            .order_by(CDRRecord.record_index)
+            .all()
+        )
+        records_data = []
+        for r in all_records:
+            data = r.get_raw_data()
+            if "calling_number" not in data:
+                data["calling_number"] = r.calling_number
+            records_data.append(data)
+        parser.save_records_to_file(filepath, records_data)
+
+        flash("Record deleted successfully", "success")
     except Exception as e:
         logging.error(f"Error deleting record: {str(e)}")
-        flash(f'Error deleting record: {str(e)}', 'error')
-    
-    return redirect(url_for('view_results', file_id=file_id))
+        flash(f"Error deleting record: {str(e)}", "error")
 
-@app.route('/delete/<int:file_id>', methods=['POST'])
+    return redirect(url_for("view_results", file_id=file_id))
+
+
+@app.route("/delete/<int:file_id>", methods=["POST"])
 def delete_file(file_id):
     cdr_file = CDRFile.query.get_or_404(file_id)
-    
+
     try:
         # Delete the physical file
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], cdr_file.filename)
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
         if os.path.exists(filepath):
             os.remove(filepath)
-        
+
         # Delete from database (records will be deleted due to cascade)
         db.session.delete(cdr_file)
         db.session.commit()
-        
-        flash('File deleted successfully', 'success')
+
+        flash("File deleted successfully", "success")
     except Exception as e:
         logging.error(f"Error deleting file: {str(e)}")
-        flash(f'Error deleting file: {str(e)}', 'error')
-    
-    return redirect(url_for('index'))
+        flash(f"Error deleting file: {str(e)}", "error")
+
+    return redirect(url_for("index"))
