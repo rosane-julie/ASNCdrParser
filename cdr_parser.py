@@ -11,7 +11,7 @@ from pyasn1 import error
 
 
 class CDRParser:
-    """ASN.1 CDR Parser for telecom Call Detail Records"""
+    """SENORA ASN parser for telecom Call Detail Records"""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -38,14 +38,20 @@ class CDRParser:
             file_size = os.path.getsize(filepath)
             self.logger.info(f"Processing file {filepath} of size {file_size} bytes")
 
-            # For files larger than 1MB, use enhanced BCD parsing directly
-            if file_size > 1024 * 1024:  # 1MB
-                self.logger.info("Large file detected - using enhanced BCD parsing")
+            # Very large files are parsed in chunks to avoid memory issues
+            if file_size > 10 * 1024 * 1024:  # >10MB
+                self.logger.info("Large file detected - using chunked parser")
+                return self.parse_large_file(filepath)
+
+            # Medium sized files use the raw binary parser for speed
+            if file_size > 1024 * 1024:  # >1MB
+                self.logger.info("Medium file detected - using enhanced BCD parsing")
                 return self.parse_raw_binary_file(filepath)
-            else:
-                with open(filepath, "rb") as f:
-                    data = f.read()
-                return self.parse_binary_data(data)
+
+            # Small files are loaded entirely in memory
+            with open(filepath, "rb") as f:
+                data = f.read()
+            return self.parse_binary_data(data)
 
         except Exception as e:
             self.logger.error(f"Error reading file {filepath}: {str(e)}")
@@ -54,6 +60,42 @@ class CDRParser:
                 return self.parse_raw_binary_file(filepath)
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
+
+    def parse_file_chunk(self, filepath, start_record=0, max_records=1000):
+        """Parse a portion of a CDR file starting at ``start_record``.
+
+        Returns a tuple ``(records, reached_end)`` where ``records`` is a list
+        of parsed records and ``reached_end`` indicates if the end of the file
+        was reached during parsing.
+        """
+        records = []
+        chunk_size = 10 * 1024 * 1024  # 10MB
+        record_index = 0
+        reached_end = False
+
+        try:
+            with open(filepath, "rb") as f:
+                while len(records) < max_records:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        reached_end = True
+                        break
+
+                    chunk_records = self.parse_binary_data_chunk(chunk, record_index)
+                    for r in chunk_records:
+                        if record_index >= start_record and len(records) < max_records:
+                            records.append(r)
+                        record_index += 1
+                        if len(records) >= max_records:
+                            break
+
+                    if len(records) >= max_records:
+                        break
+
+        except Exception as e:
+            self.logger.error(f"Error processing file chunk: {str(e)}")
+
+        return records, reached_end
 
     def parse_binary_data(self, data):
         """Parse binary ASN.1 data and extract CDR records"""
