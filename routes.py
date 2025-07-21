@@ -519,6 +519,22 @@ def save_as(file_id):
                 "error",
             )
             return redirect(request.url)
+        try:
+            start_idx = int(request.form.get("start_index", 0))
+        except ValueError:
+            start_idx = 0
+        try:
+            end_idx = int(request.form.get("end_index", cdr_file.records_count - 1))
+        except ValueError:
+            end_idx = cdr_file.records_count - 1
+
+        if start_idx < 0:
+            start_idx = 0
+        if end_idx >= cdr_file.records_count:
+            end_idx = cdr_file.records_count - 1
+        if end_idx < start_idx:
+            flash("Invalid record range", "error")
+            return redirect(request.url)
 
         new_filename = secure_filename(new_name)
         new_path = os.path.join(app.config["UPLOAD_FOLDER"], new_filename)
@@ -526,13 +542,21 @@ def save_as(file_id):
             flash("File already exists", "error")
             return redirect(request.url)
 
+        # Copy the original file first
+        original_path = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
+        shutil.copy2(original_path, new_path)
 
+        parser = CDRParser()
+        selected_records = (
+            CDRRecord.query.filter_by(file_id=cdr_file.id)
+            .filter(CDRRecord.record_index >= start_idx)
+            .filter(CDRRecord.record_index <= end_idx)
             .order_by(CDRRecord.record_index)
             .all()
         )
         records_data = []
-
-            data = r.get_raw_data()
+        for r in selected_records:
+           data = r.get_raw_data()
             if "calling_number" not in data:
                 data["calling_number"] = r.calling_number
             records_data.append(data)
@@ -549,8 +573,7 @@ def save_as(file_id):
         )
         db.session.add(new_file)
         db.session.commit()
-
-
+        for i, r in enumerate(selected_records):
             new_record = CDRRecord(
                 file_id=new_file.id,
                 record_index=i,
@@ -570,3 +593,41 @@ def save_as(file_id):
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
 
+@app.route("/parse_next/<int:file_id>", methods=["POST"])
+def parse_next(file_id):
+    """Parse the next 1000 records from the CDR file."""
+    cdr_file = CDRFile.query.get_or_404(file_id)
+    start_index = CDRRecord.query.filter_by(file_id=file_id).count()
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
+
+    parser = CDRParser()
+    records, reached_end = parser.parse_file_chunk(filepath, start_record=start_index, max_records=1000)
+
+    if not records:
+        flash("No more records found", "info")
+        return redirect(url_for("view_results", file_id=file_id))
+
+    for i, record in enumerate(records):
+        cdr_record = CDRRecord(
+            file_id=file_id,
+            record_index=start_index + i,
+            record_type=record.get("record_type", "unknown"),
+            calling_number=record.get("calling_number"),
+            called_number=record.get("called_number"),
+            call_duration=record.get("call_duration"),
+            start_time=record.get("start_time"),
+            end_time=record.get("end_time"),
+        )
+        cdr_record.set_raw_data(record)
+        db.session.add(cdr_record)
+
+    cdr_file.records_count = start_index + len(records)
+    db.session.commit()
+    if reached_end:
+        flash(
+            f"Parsed {len(records)} records and reached end of file",
+            "success",
+        )
+    else:
+        flash(f"Parsed {len(records)} additional records", "success")
+    return redirect(url_for("view_results", file_id=file_id))
