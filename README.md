@@ -10,6 +10,7 @@ SENORA ASN is a web-based tool for parsing telecom Call Detail Records stored in
 - "Save As" to create new files from existing records
 - Incremental parsing in batches of 1000 records
 - Option to split a selection of records into a new file
+- Faster incremental parsing using stored file offsets
 
 ## Running
 Install dependencies with `pip install -r requirements.txt` or via `poetry install`, then start the app with:

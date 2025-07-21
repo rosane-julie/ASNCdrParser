@@ -92,6 +92,7 @@ def upload_file():
 
                     cdr_file.records_count = len(records)
                     cdr_file.parse_status = "success"
+                    cdr_file.parse_offset = os.path.getsize(filepath)
                     db.session.commit()
 
                     flash(
@@ -519,6 +520,7 @@ def save_as(file_id):
                 "error",
             )
             return redirect(request.url)
+
         try:
             start_idx = int(request.form.get("start_index", 0))
         except ValueError:
@@ -601,7 +603,15 @@ def parse_next(file_id):
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
 
     parser = CDRParser()
+    records, reached_end, new_offset = parser.parse_file_chunk(
+        filepath,
+        start_record=start_index,
+        max_records=1000,
+        offset=cdr_file.parse_offset,
+    )
+
     records, reached_end = parser.parse_file_chunk(filepath, start_record=start_index, max_records=1000)
+
 
     if not records:
         flash("No more records found", "info")
@@ -622,6 +632,7 @@ def parse_next(file_id):
         db.session.add(cdr_record)
 
     cdr_file.records_count = start_index + len(records)
+    cdr_file.parse_offset = new_offset
     db.session.commit()
     if reached_end:
         flash(
