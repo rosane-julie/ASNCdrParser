@@ -575,7 +575,6 @@ def save_as(file_id):
         )
         db.session.add(new_file)
         db.session.commit()
-
         for i, r in enumerate(selected_records):
             new_record = CDRRecord(
                 file_id=new_file.id,
@@ -596,7 +595,6 @@ def save_as(file_id):
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
 
-
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
     """Parse the next 1000 records from the CDR file."""
@@ -611,6 +609,9 @@ def parse_next(file_id):
         max_records=1000,
         offset=cdr_file.parse_offset,
     )
+
+    records, reached_end = parser.parse_file_chunk(filepath, start_record=start_index, max_records=1000)
+
 
     if not records:
         flash("No more records found", "info")
