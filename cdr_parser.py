@@ -33,7 +33,11 @@ class CDRParser:
             
         except Exception as e:
             self.logger.error(f"Error reading file {filepath}: {str(e)}")
-            raise Exception(f"Failed to read file: {str(e)}")
+            # Fallback to raw binary parsing if standard parsing fails
+            try:
+                return self.parse_raw_binary_file(filepath)
+            except Exception:
+                raise Exception(f"Failed to read file: {str(e)}")
     
     def parse_binary_data(self, data):
         """Parse binary ASN.1 data and extract CDR records"""
@@ -787,10 +791,10 @@ class CDRParser:
     #     return records[:100]  # Limit to 100 records
     
     def parse_telecom_binary_data(self, data):
-    
+        """Analyze raw binary telecom data and build basic records."""
 
-    # Only scan the first 256 KB for most patterns
-        scan_data = data[:256*1024]
+        # Only scan the first 256 KB for most patterns
+        scan_data = data[:256 * 1024]
 
         # 1) Network IDs
         network_patterns = re.findall(rb'[A-Z]{3,}[A-Z0-9_]{3,}', scan_data)
@@ -798,14 +802,34 @@ class CDRParser:
 
         # 2) BCD phones (limit collection aggressively)
         all_phone_numbers = []
-        for i in range(0, min(len(scan_data) - 8, 256*1024), 1):
-            chunk = scan_data[i:i+8]
-            # decode BCD (your existing logic)…
-            # once you have 100 numbers, stop
-            if len(all_phone_numbers) >= 100:
-                break
+        for i in range(0, min(len(scan_data) - 8, 256 * 1024)):
+            chunk = scan_data[i : i + 8]
+            number = ''
+            valid = True
+            for byte in chunk:
+                hi = (byte >> 4) & 0x0F
+                lo = byte & 0x0F
+                if hi <= 9:
+                    number += str(hi)
+                elif hi == 0xF:
+                    break
+                else:
+                    valid = False
+                    break
+                if lo <= 9:
+                    number += str(lo)
+                elif lo == 0xF:
+                    break
+                else:
+                    valid = False
+                    break
+            if valid and 10 <= len(number) <= 15 and number.isdigit():
+                if number not in all_phone_numbers:
+                    all_phone_numbers.append(number)
+                if len(all_phone_numbers) >= 100:
+                    break
 
-        # 3) ASCII phones (on the same slice)
+        # 3) ASCII phones
         phone_patterns = [rb'91[0-9]{10}', rb'[0-9]{10,15}', rb'[0-9]{7,10}']
         for pat in phone_patterns:
             for m in re.findall(pat, scan_data):
@@ -817,7 +841,7 @@ class CDRParser:
             if len(all_phone_numbers) >= 100:
                 break
 
-        # 4) Timestamps & durations (same slice)
+        # 4) Timestamps and durations
         timestamp_patterns = [rb'[12][0-9]{7,13}', rb'[0-9]{8,14}']
         potential_timestamps = []
         for pat in timestamp_patterns:
@@ -830,18 +854,51 @@ class CDRParser:
 
         duration_matches = re.findall(rb'\x00[\x01-\xff][\x01-\xff]', scan_data)
 
-        # 5) Record boundaries — only scan first 512 KB
-        marker_data = data[:512*1024]
-        record_markers = []
-        for i in range(len(marker_data) - 20):
-            chunk = marker_data[i:i+20]
-            if b'\x30\x83' in chunk or b'\x30\x82' in chunk:
-                record_markers.append(i)
-                if len(record_markers) >= 100:
-                    break
+        # Build simple records using the extracted data
+        records = []
+        num_records = max(1, min(50, len(all_phone_numbers) or 1))
 
-        # Now build your records from these *much smaller* lists…
-        # (everything else stays the same, but always slice and cap)
+        timestamps = [self.parse_timestamp(ts) for ts in potential_timestamps]
+        timestamps = [t for t in timestamps if t][:num_records + 1]
+
+        durations = []
+        for m in duration_matches[:num_records]:
+            if len(m) >= 2:
+                try:
+                    val = int.from_bytes(m[1:], 'big')
+                    if 1 <= val <= 86400:
+                        durations.append(val)
+                except Exception:
+                    pass
+
+        for i in range(num_records):
+            record = {
+                'record_index': i,
+                'record_type': 'telecom_record',
+                'parsing_method': 'binary_scan',
+            }
+
+            if all_phone_numbers:
+                record['calling_number'] = all_phone_numbers[i % len(all_phone_numbers)]
+                if len(all_phone_numbers) > 1:
+                    record['called_number'] = all_phone_numbers[(i + 1) % len(all_phone_numbers)]
+                record['all_phone_numbers'] = all_phone_numbers[:20]
+
+            if i < len(timestamps):
+                record['start_time'] = timestamps[i]
+            if i + 1 < len(timestamps):
+                record['end_time'] = timestamps[i + 1]
+
+            if i < len(durations):
+                record['call_duration'] = durations[i]
+
+            if network_elements:
+                record['network_elements'] = network_elements
+                record['source_network'] = network_elements[0]
+
+            records.append(record)
+
+        return records
 
 
     def analyze_telecom_chunk(self, chunk, record_index):
