@@ -21,6 +21,7 @@
                             Allowed types: {{ ', '.join(ALLOWED_EXTENSIONS) }}
                         </div>
                     </div>
+
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('view_results', file_id=cdr_file.id) }}" class="btn btn-outline-secondary">
                             <i class="fas fa-arrow-left me-2"></i>Cancel

@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 from app import app, db
 from models import CDRFile, CDRRecord
 from cdr_parser import CDRParser
+import shutil
 import tempfile
 import csv
 import io
@@ -525,14 +526,12 @@ def save_as(file_id):
             flash("File already exists", "error")
             return redirect(request.url)
 
-        parser = CDRParser()
-        all_records = (
-            CDRRecord.query.filter_by(file_id=cdr_file.id)
+
             .order_by(CDRRecord.record_index)
             .all()
         )
         records_data = []
-        for r in all_records:
+
             data = r.get_raw_data()
             if "calling_number" not in data:
                 data["calling_number"] = r.calling_number
@@ -551,7 +550,7 @@ def save_as(file_id):
         db.session.add(new_file)
         db.session.commit()
 
-        for i, r in enumerate(all_records):
+
             new_record = CDRRecord(
                 file_id=new_file.id,
                 record_index=i,
@@ -570,3 +569,4 @@ def save_as(file_id):
         return redirect(url_for("view_results", file_id=new_file.id))
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
+
