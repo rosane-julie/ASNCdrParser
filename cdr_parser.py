@@ -38,14 +38,20 @@ class CDRParser:
             file_size = os.path.getsize(filepath)
             self.logger.info(f"Processing file {filepath} of size {file_size} bytes")
 
-            # For files larger than 1MB, use enhanced BCD parsing directly
-            if file_size > 1024 * 1024:  # 1MB
-                self.logger.info("Large file detected - using enhanced BCD parsing")
+            # Very large files are parsed in chunks to avoid memory issues
+            if file_size > 10 * 1024 * 1024:  # >10MB
+                self.logger.info("Large file detected - using chunked parser")
+                return self.parse_large_file(filepath)
+
+            # Medium sized files use the raw binary parser for speed
+            if file_size > 1024 * 1024:  # >1MB
+                self.logger.info("Medium file detected - using enhanced BCD parsing")
                 return self.parse_raw_binary_file(filepath)
-            else:
-                with open(filepath, "rb") as f:
-                    data = f.read()
-                return self.parse_binary_data(data)
+
+            # Small files are loaded entirely in memory
+            with open(filepath, "rb") as f:
+                data = f.read()
+            return self.parse_binary_data(data)
 
         except Exception as e:
             self.logger.error(f"Error reading file {filepath}: {str(e)}")
