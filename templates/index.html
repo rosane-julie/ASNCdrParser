@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Home - ASN.1 CDR Parser{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-secondary p-5 rounded-3 mb-4">
+            <h1 class="display-4"><i class="fas fa-file-code me-3"></i>ASN.1 CDR Parser</h1>
+            <p class="lead">Upload and parse telecom Call Detail Records (CDR) from binary ASN.1 files. Extract call information, analyze usage patterns, and export data in multiple formats.</p>
+            <hr class="my-4">
+            <p>Supports common telecom CDR formats including 3GPP standards. Parse voice calls, SMS, and data session records with detailed field extraction.</p>
+            <a class="btn btn-primary btn-lg" href="{{ url_for('upload_file') }}" role="button">
+                <i class="fas fa-upload me-2"></i>Upload CDR File
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle me-2"></i>Supported Features
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>ASN.1 BER/DER decoding</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Multiple CDR record types</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Voice, SMS, and data records</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Search and filter functionality</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Export to JSON and CSV</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Large file handling</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-file-import me-2"></i>Supported Formats
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-file me-2"></i>.dat - Binary CDR files</li>
+                    <li class="mb-2"><i class="fas fa-file me-2"></i>.cdr - Call Detail Records</li>
+                    <li class="mb-2"><i class="fas fa-file me-2"></i>.bin - Binary ASN.1 files</li>
+                    <li class="mb-2"><i class="fas fa-file me-2"></i>.asn1 - ASN.1 encoded files</li>
+                    <li class="mb-2"><i class="fas fa-file me-2"></i>.ber - Basic Encoding Rules</li>
+                    <li class="mb-2"><i class="fas fa-file me-2"></i>.der - Distinguished Encoding Rules</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if recent_files %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Files
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Upload Time</th>
+                                <th>File Size</th>
+                                <th>Status</th>
+                                <th>Records</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for file in recent_files %}
+                            <tr>
+                                <td>
+                                    <i class="fas fa-file me-2"></i>
+                                    {{ file.original_filename }}
+                                </td>
+                                <td>{{ file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                <td>{{ "%.2f"|format(file.file_size / 1024 / 1024) }} MB</td>
+                                <td>
+                                    {% if file.parse_status == 'success' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check me-1"></i>Success
+                                        </span>
+                                    {% elif file.parse_status == 'error' %}
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-times me-1"></i>Error
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-clock me-1"></i>Pending
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if file.records_count > 0 %}
+                                        <span class="badge bg-info">{{ file.records_count }}</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if file.parse_status == 'success' %}
+                                        <a href="{{ url_for('view_results', file_id=file.id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye me-1"></i>View
+                                        </a>
+                                    {% endif %}
+                                    <form method="POST" action="{{ url_for('delete_file', file_id=file.id) }}" class="d-inline" 
+                                          onsubmit="return confirm('Are you sure you want to delete this file?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-trash me-1"></i>Delete
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

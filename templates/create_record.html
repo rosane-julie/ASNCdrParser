@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Record - {{ cdr_file.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-plus me-2"></i>Create New CDR Record
+                </h5>
+                <small class="text-muted">File: {{ cdr_file.original_filename }}</small>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="createRecordForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="record_type" class="form-label">Record Type *</label>
+                            <select class="form-select" id="record_type" name="record_type" required>
+                                <option value="">Select record type...</option>
+                                <option value="voice_call">Voice Call</option>
+                                <option value="sms">SMS</option>
+                                <option value="data_session">Data Session</option>
+                                <option value="mms">MMS</option>
+                                <option value="gprs">GPRS</option>
+                                <option value="manual">Manual Entry</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <input type="text" class="form-control mt-2 d-none" id="custom_record_type" placeholder="Enter custom record type">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="call_duration" class="form-label">Duration (seconds)</label>
+                            <input type="number" class="form-control" id="call_duration" name="call_duration" 
+                                   min="0" placeholder="Call duration in seconds">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="calling_number" class="form-label">Calling Number (A-Party)</label>
+                            <input type="text" class="form-control" id="calling_number" name="calling_number" 
+                                   placeholder="e.g., +1234567890">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="called_number" class="form-label">Called Number (B-Party)</label>
+                            <input type="text" class="form-control" id="called_number" name="called_number" 
+                                   placeholder="e.g., +0987654321">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_time" class="form-label">Start Time</label>
+                            <input type="datetime-local" class="form-control" id="start_time" name="start_time">
+                            <div class="form-text">Format: YYYY-MM-DD HH:MM:SS</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_time" class="form-label">End Time</label>
+                            <input type="datetime-local" class="form-control" id="end_time" name="end_time">
+                            <div class="form-text">Format: YYYY-MM-DD HH:MM:SS</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="raw_data" class="form-label">Raw ASN.1 Data (JSON)</label>
+                        <textarea class="form-control" id="raw_data" name="raw_data" rows="8" 
+                                  placeholder='{"record_type": "voice_call", "calling_party": "+1234567890", "called_party": "+0987654321"}'></textarea>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Optional: Enter valid JSON data for additional record information.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Creating Records:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Record Type is required for all new records</li>
+                            <li>Phone numbers can include country codes (e.g., +1, +44)</li>
+                            <li>Duration is automatically calculated if both start and end times are provided</li>
+                            <li>Raw data must be valid JSON format if provided</li>
+                            <li>All fields except Record Type are optional</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('view_results', file_id=cdr_file.id) }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Results
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create Record
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Handle custom record type
+document.getElementById('record_type').addEventListener('change', function() {
+    const customInput = document.getElementById('custom_record_type');
+    if (this.value === 'custom') {
+        customInput.classList.remove('d-none');
+        customInput.focus();
+        customInput.required = true;
+    } else {
+        customInput.classList.add('d-none');
+        customInput.required = false;
+    }
+});
+
+// Auto-calculate duration when start and end times change
+function calculateDuration() {
+    const startTime = document.getElementById('start_time').value;
+    const endTime = document.getElementById('end_time').value;
+    
+    if (startTime && endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const duration = Math.floor((end - start) / 1000); // Duration in seconds
+        
+        if (duration > 0) {
+            document.getElementById('call_duration').value = duration;
+        }
+    }
+}
+
+document.getElementById('start_time').addEventListener('change', calculateDuration);
+document.getElementById('end_time').addEventListener('change', calculateDuration);
+
+// Set default values
+document.addEventListener('DOMContentLoaded', function() {
+    // Set current time as default for start time
+    const now = new Date();
+    const currentTime = now.getFullYear() + '-' + 
+                       String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                       String(now.getDate()).padStart(2, '0') + 'T' +
+                       String(now.getHours()).padStart(2, '0') + ':' + 
+                       String(now.getMinutes()).padStart(2, '0');
+    
+    document.getElementById('start_time').value = currentTime;
+});
+
+// Form submission handling
+document.getElementById('createRecordForm').addEventListener('submit', function(e) {
+    const recordTypeSelect = document.getElementById('record_type');
+    const customInput = document.getElementById('custom_record_type');
+    
+    // Handle custom record type
+    if (recordTypeSelect.value === 'custom') {
+        if (!customInput.value.trim()) {
+            e.preventDefault();
+            alert('Please enter a custom record type.');
+            customInput.focus();
+            return false;
+        }
+        
+        // Create a hidden input with the custom value
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'record_type';
+        hiddenInput.value = customInput.value.trim();
+        this.appendChild(hiddenInput);
+        recordTypeSelect.disabled = true;
+    }
+    
+    // Validate JSON in raw_data field
+    const rawDataTextarea = document.getElementById('raw_data');
+    if (rawDataTextarea.value.trim()) {
+        try {
+            JSON.parse(rawDataTextarea.value);
+        } catch (error) {
+            e.preventDefault();
+            alert('Invalid JSON format in Raw Data field. Please check the syntax.');
+            rawDataTextarea.focus();
+            return false;
+        }
+    }
+    
+    // Convert datetime-local to the expected format
+    const startTimeInput = document.getElementById('start_time');
+    const endTimeInput = document.getElementById('end_time');
+    
+    if (startTimeInput.value) {
+        const startDate = new Date(startTimeInput.value);
+        const startFormatted = startDate.getFullYear() + '-' + 
+                              String(startDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                              String(startDate.getDate()).padStart(2, '0') + ' ' +
+                              String(startDate.getHours()).padStart(2, '0') + ':' + 
+                              String(startDate.getMinutes()).padStart(2, '0') + ':' + 
+                              String(startDate.getSeconds()).padStart(2, '0');
+        
+        const hiddenStart = document.createElement('input');
+        hiddenStart.type = 'hidden';
+        hiddenStart.name = 'start_time';
+        hiddenStart.value = startFormatted;
+        this.appendChild(hiddenStart);
+        startTimeInput.disabled = true;
+    }
+    
+    if (endTimeInput.value) {
+        const endDate = new Date(endTimeInput.value);
+        const endFormatted = endDate.getFullYear() + '-' + 
+                            String(endDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                            String(endDate.getDate()).padStart(2, '0') + ' ' +
+                            String(endDate.getHours()).padStart(2, '0') + ':' + 
+                            String(endDate.getMinutes()).padStart(2, '0') + ':' + 
+                            String(endDate.getSeconds()).padStart(2, '0');
+        
+        const hiddenEnd = document.createElement('input');
+        hiddenEnd.type = 'hidden';
+        hiddenEnd.name = 'end_time';
+        hiddenEnd.value = endFormatted;
+        this.appendChild(hiddenEnd);
+        endTimeInput.disabled = true;
+    }
+});
+
+// JSON formatting helper
+function formatJSON() {
+    const textarea = document.getElementById('raw_data');
+    try {
+        const parsed = JSON.parse(textarea.value);
+        textarea.value = JSON.stringify(parsed, null, 2);
+    } catch (error) {
+        alert('Invalid JSON format. Please check the syntax.');
+    }
+}
+
+// Add format button
+const rawDataLabel = document.querySelector('label[for="raw_data"]');
+const formatBtn = document.createElement('button');
+formatBtn.type = 'button';
+formatBtn.className = 'btn btn-sm btn-outline-info ms-2';
+formatBtn.innerHTML = '<i class="fas fa-code me-1"></i>Format JSON';
+formatBtn.onclick = formatJSON;
+rawDataLabel.appendChild(formatBtn);
+
+// Phone number validation
+function validatePhoneNumber(input) {
+    const phoneRegex = /^[\+]?[0-9\-\s\(\)]{7,15}$/;
+    if (input.value && !phoneRegex.test(input.value)) {
+        input.setCustomValidity('Please enter a valid phone number (7-15 digits, + allowed for country code)');
+    } else {
+        input.setCustomValidity('');
+    }
+}
+
+document.getElementById('calling_number').addEventListener('input', function() {
+    validatePhoneNumber(this);
+});
+
+document.getElementById('called_number').addEventListener('input', function() {
+    validatePhoneNumber(this);
+});
+</script>
+{% endblock %}

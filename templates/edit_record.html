@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Record - {{ cdr_file.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-edit me-2"></i>Edit CDR Record #{{ record.record_index }}
+                </h5>
+                <small class="text-muted">File: {{ cdr_file.original_filename }}</small>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="editRecordForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="record_type" class="form-label">Record Type</label>
+                            <select class="form-select" id="record_type" name="record_type">
+                                <option value="voice_call" {% if record.record_type == 'voice_call' %}selected{% endif %}>Voice Call</option>
+                                <option value="sms" {% if record.record_type == 'sms' %}selected{% endif %}>SMS</option>
+                                <option value="data_session" {% if record.record_type == 'data_session' %}selected{% endif %}>Data Session</option>
+                                <option value="mms" {% if record.record_type == 'mms' %}selected{% endif %}>MMS</option>
+                                <option value="gprs" {% if record.record_type == 'gprs' %}selected{% endif %}>GPRS</option>
+                                <option value="manual" {% if record.record_type == 'manual' %}selected{% endif %}>Manual Entry</option>
+                                <option value="unknown" {% if record.record_type == 'unknown' or not record.record_type %}selected{% endif %}>Unknown</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <input type="text" class="form-control mt-2 d-none" id="custom_record_type" placeholder="Enter custom record type">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="call_duration" class="form-label">Duration (seconds)</label>
+                            <input type="number" class="form-control" id="call_duration" name="call_duration" 
+                                   value="{{ record.call_duration or '' }}" min="0" placeholder="Call duration in seconds">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="calling_number" class="form-label">Calling Number (A-Party)</label>
+                            <input type="text" class="form-control" id="calling_number" name="calling_number" 
+                                   value="{{ record.calling_number or '' }}" placeholder="e.g., +1234567890">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="called_number" class="form-label">Called Number (B-Party)</label>
+                            <input type="text" class="form-control" id="called_number" name="called_number" 
+                                   value="{{ record.called_number or '' }}" placeholder="e.g., +0987654321">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="start_time" class="form-label">Start Time</label>
+                            <input type="datetime-local" class="form-control" id="start_time" name="start_time" 
+                                   value="{% if record.start_time %}{{ record.start_time.strftime('%Y-%m-%dT%H:%M:%S') }}{% endif %}">
+                            <div class="form-text">Format: YYYY-MM-DD HH:MM:SS</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="end_time" class="form-label">End Time</label>
+                            <input type="datetime-local" class="form-control" id="end_time" name="end_time" 
+                                   value="{% if record.end_time %}{{ record.end_time.strftime('%Y-%m-%dT%H:%M:%S') }}{% endif %}">
+                            <div class="form-text">Format: YYYY-MM-DD HH:MM:SS</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="raw_data" class="form-label">Raw ASN.1 Data (JSON)</label>
+                        <textarea class="form-control" id="raw_data" name="raw_data" rows="8" 
+                                  placeholder='{"field": "value", "nested": {"key": "value"}}'
+                        >{% if record.raw_data %}{{ record.raw_data }}{% endif %}</textarea>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Enter valid JSON data. This field stores the complete parsed ASN.1 structure.
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Quick Tips:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Phone numbers can include country codes (e.g., +1, +44)</li>
+                            <li>Duration is automatically calculated if both start and end times are provided</li>
+                            <li>Raw data must be valid JSON format</li>
+                            <li>Leave fields empty to clear their values</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <a href="{{ url_for('view_results', file_id=cdr_file.id) }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back to Results
+                            </a>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-outline-danger me-2" onclick="deleteRecord()">
+                                <i class="fas fa-trash me-2"></i>Delete Record
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                <!-- Delete form (hidden) -->
+                <form id="deleteForm" method="POST" action="{{ url_for('delete_record', record_id=record.id) }}" class="d-none">
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Handle custom record type
+document.getElementById('record_type').addEventListener('change', function() {
+    const customInput = document.getElementById('custom_record_type');
+    if (this.value === 'custom') {
+        customInput.classList.remove('d-none');
+        customInput.focus();
+    } else {
+        customInput.classList.add('d-none');
+    }
+});
+
+// Auto-calculate duration when start and end times change
+function calculateDuration() {
+    const startTime = document.getElementById('start_time').value;
+    const endTime = document.getElementById('end_time').value;
+    
+    if (startTime && endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const duration = Math.floor((end - start) / 1000); // Duration in seconds
+        
+        if (duration > 0) {
+            document.getElementById('call_duration').value = duration;
+        }
+    }
+}
+
+document.getElementById('start_time').addEventListener('change', calculateDuration);
+document.getElementById('end_time').addEventListener('change', calculateDuration);
+
+// Form submission handling
+document.getElementById('editRecordForm').addEventListener('submit', function(e) {
+    const recordTypeSelect = document.getElementById('record_type');
+    const customInput = document.getElementById('custom_record_type');
+    
+    // Handle custom record type
+    if (recordTypeSelect.value === 'custom' && customInput.value.trim()) {
+        // Create a hidden input with the custom value
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'record_type';
+        hiddenInput.value = customInput.value.trim();
+        this.appendChild(hiddenInput);
+        recordTypeSelect.disabled = true;
+    }
+    
+    // Validate JSON in raw_data field
+    const rawDataTextarea = document.getElementById('raw_data');
+    if (rawDataTextarea.value.trim()) {
+        try {
+            JSON.parse(rawDataTextarea.value);
+        } catch (error) {
+            e.preventDefault();
+            alert('Invalid JSON format in Raw Data field. Please check the syntax.');
+            rawDataTextarea.focus();
+            return false;
+        }
+    }
+    
+    // Convert datetime-local to the expected format
+    const startTimeInput = document.getElementById('start_time');
+    const endTimeInput = document.getElementById('end_time');
+    
+    if (startTimeInput.value) {
+        const startDate = new Date(startTimeInput.value);
+        const startFormatted = startDate.getFullYear() + '-' + 
+                              String(startDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                              String(startDate.getDate()).padStart(2, '0') + ' ' +
+                              String(startDate.getHours()).padStart(2, '0') + ':' + 
+                              String(startDate.getMinutes()).padStart(2, '0') + ':' + 
+                              String(startDate.getSeconds()).padStart(2, '0');
+        
+        const hiddenStart = document.createElement('input');
+        hiddenStart.type = 'hidden';
+        hiddenStart.name = 'start_time';
+        hiddenStart.value = startFormatted;
+        this.appendChild(hiddenStart);
+        startTimeInput.disabled = true;
+    }
+    
+    if (endTimeInput.value) {
+        const endDate = new Date(endTimeInput.value);
+        const endFormatted = endDate.getFullYear() + '-' + 
+                            String(endDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                            String(endDate.getDate()).padStart(2, '0') + ' ' +
+                            String(endDate.getHours()).padStart(2, '0') + ':' + 
+                            String(endDate.getMinutes()).padStart(2, '0') + ':' + 
+                            String(endDate.getSeconds()).padStart(2, '0');
+        
+        const hiddenEnd = document.createElement('input');
+        hiddenEnd.type = 'hidden';
+        hiddenEnd.name = 'end_time';
+        hiddenEnd.value = endFormatted;
+        this.appendChild(hiddenEnd);
+        endTimeInput.disabled = true;
+    }
+});
+
+// Delete record function
+function deleteRecord() {
+    if (confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
+        document.getElementById('deleteForm').submit();
+    }
+}
+
+// JSON formatting helper
+function formatJSON() {
+    const textarea = document.getElementById('raw_data');
+    try {
+        const parsed = JSON.parse(textarea.value);
+        textarea.value = JSON.stringify(parsed, null, 2);
+    } catch (error) {
+        alert('Invalid JSON format. Please check the syntax.');
+    }
+}
+
+// Add format button
+const rawDataLabel = document.querySelector('label[for="raw_data"]');
+const formatBtn = document.createElement('button');
+formatBtn.type = 'button';
+formatBtn.className = 'btn btn-sm btn-outline-info ms-2';
+formatBtn.innerHTML = '<i class="fas fa-code me-1"></i>Format JSON';
+formatBtn.onclick = formatJSON;
+rawDataLabel.appendChild(formatBtn);
+</script>
+{% endblock %}

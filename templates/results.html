@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}CDR Results - {{ cdr_file.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-file-alt me-2"></i>{{ cdr_file.original_filename }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Upload Time:</strong><br>
+                        <span class="text-muted">{{ cdr_file.upload_time.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>File Size:</strong><br>
+                        <span class="text-muted">{{ "%.2f"|format(cdr_file.file_size / 1024 / 1024) }} MB</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Status:</strong><br>
+                        {% if cdr_file.parse_status == 'success' %}
+                            <span class="badge bg-success">
+                                <i class="fas fa-check me-1"></i>Success
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger">
+                                <i class="fas fa-times me-1"></i>Error
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Records Found:</strong><br>
+                        <span class="text-muted">{{ cdr_file.records_count }}</span>
+                    </div>
+                </div>
+                
+                {% if cdr_file.error_message %}
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Parsing Error:</strong> {{ cdr_file.error_message }}
+                </div>
+                {% endif %}
+                
+                {% if cdr_file.parse_status == 'success' %}
+                <div class="mt-3">
+                    <a href="{{ url_for('create_record_form', file_id=cdr_file.id) }}" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-plus me-1"></i>Add Record
+                    </a>
+                    <a href="{{ url_for('export_data', file_id=cdr_file.id, format='json') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-download me-1"></i>Export JSON
+                    </a>
+                    <a href="{{ url_for('export_data', file_id=cdr_file.id, format='csv') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-download me-1"></i>Export CSV
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if cdr_file.parse_status == 'success' and cdr_file.records_count > 0 %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-filter me-2"></i>Search and Filter
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search Numbers</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               value="{{ search_query }}" placeholder="Calling or called number">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="record_type" class="form-label">Record Type</label>
+                        <select class="form-select" id="record_type" name="record_type">
+                            <option value="">All Types</option>
+                            {% for rtype in record_types %}
+                            <option value="{{ rtype }}" {% if rtype == record_type_filter %}selected{% endif %}>
+                                {{ rtype.title() }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="fas fa-search me-1"></i>Filter
+                        </button>
+                        <a href="{{ url_for('view_results', file_id=cdr_file.id) }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-table me-2"></i>CDR Records
+                </h6>
+                <small class="text-muted">
+                    Showing {{ records.items|length }} of {{ records.total }} records
+                </small>
+            </div>
+            <div class="card-body">
+                {% if records.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="cdrTable">
+                        <thead>
+                            <tr>
+                                <th>Index</th>
+                                <th>Type</th>
+                                <th>Calling Number</th>
+                                <th>Called Number</th>
+                                <th>Duration</th>
+                                <th>Start Time</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in records.items %}
+                            <tr>
+                                <td>{{ record.record_index }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ record.record_type or 'unknown' }}</span>
+                                </td>
+                                <td>{{ record.calling_number or '-' }}</td>
+                                <td>{{ record.called_number or '-' }}</td>
+                                <td>
+                                    {% if record.call_duration %}
+                                        {{ record.call_duration }}s
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if record.start_time %}
+                                        {{ record.start_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-info" 
+                                                onclick="viewRecordDetails({{ record.id }})">
+                                            <i class="fas fa-eye me-1"></i>View
+                                        </button>
+                                        <a href="{{ url_for('edit_record', record_id=record.id) }}" 
+                                           class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-edit me-1"></i>Edit
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if records.pages > 1 %}
+                <nav aria-label="CDR Records pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if records.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('view_results', file_id=cdr_file.id, page=records.prev_num, search=search_query, record_type=record_type_filter) }}">
+                                Previous
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for page_num in records.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                                {% if page_num != records.page %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('view_results', file_id=cdr_file.id, page=page_num, search=search_query, record_type=record_type_filter) }}">
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                                {% else %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ page_num }}</span>
+                                </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if records.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('view_results', file_id=cdr_file.id, page=records.next_num, search=search_query, record_type=record_type_filter) }}">
+                                Next
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h5>No Records Found</h5>
+                    <p class="text-muted">No records match your current filter criteria.</p>
+                    <a href="{{ url_for('view_results', file_id=cdr_file.id) }}" class="btn btn-outline-primary">
+                        <i class="fas fa-times me-1"></i>Clear Filters
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Record Details Modal -->
+<div class="modal fade" id="recordDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>Record Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="recordDetailsContent">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function viewRecordDetails(recordId) {
+    var modal = new bootstrap.Modal(document.getElementById('recordDetailsModal'));
+    var content = document.getElementById('recordDetailsContent');
+    
+    // Show loading spinner
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Fetch record details
+    fetch('/record/' + recordId)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                var record = data.record;
+                var html = `
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Record Type:</strong></div>
+                        <div class="col-sm-9">
+                            <span class="badge bg-secondary">${record.record_type || 'unknown'}</span>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Calling Number:</strong></div>
+                        <div class="col-sm-9">${record.calling_number || '-'}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Called Number:</strong></div>
+                        <div class="col-sm-9">${record.called_number || '-'}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Duration:</strong></div>
+                        <div class="col-sm-9">${record.call_duration ? record.call_duration + 's' : '-'}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>Start Time:</strong></div>
+                        <div class="col-sm-9">${record.start_time || '-'}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-3"><strong>End Time:</strong></div>
+                        <div class="col-sm-9">${record.end_time || '-'}</div>
+                    </div>
+                `;
+                
+                // Add additional fields if available
+                const additionalFields = ['imsi', 'imei', 'cell_id', 'all_phone_numbers'];
+                let hasAdditional = false;
+                let additionalHtml = '';
+                
+                additionalFields.forEach(field => {
+                    if (record.raw_data && record.raw_data[field]) {
+                        hasAdditional = true;
+                        let value = record.raw_data[field];
+                        if (Array.isArray(value)) {
+                            value = value.join(', ');
+                        }
+                        additionalHtml += `
+                            <div class="row mb-2">
+                                <div class="col-sm-3"><strong>${field.toUpperCase().replace('_', ' ')}:</strong></div>
+                                <div class="col-sm-9">${value}</div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                if (hasAdditional) {
+                    html += `
+                        <hr>
+                        <h6><strong>Additional Information:</strong></h6>
+                        ${additionalHtml}
+                    `;
+                }
+                
+                if (record.raw_data && Object.keys(record.raw_data).length > 0) {
+                    // Clean up the raw data display - only show relevant parts
+                    const cleanedData = {};
+                    Object.keys(record.raw_data).forEach(key => {
+                        if (!additionalFields.includes(key) && 
+                            !['record_index', 'record_type', 'calling_number', 'called_number', 
+                              'call_duration', 'start_time', 'end_time'].includes(key)) {
+                            cleanedData[key] = record.raw_data[key];
+                        }
+                    });
+                    
+                    if (Object.keys(cleanedData).length > 0) {
+                        html += `
+                            <hr>
+                            <div class="row">
+                                <div class="col-12">
+                                    <h6><strong>Technical Details:</strong></h6>
+                                    <div class="accordion" id="rawDataAccordion">
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rawDataCollapse">
+                                                    Show Raw ASN.1 Data
+                                                </button>
+                                            </h2>
+                                            <div id="rawDataCollapse" class="accordion-collapse collapse" data-bs-parent="#rawDataAccordion">
+                                                <div class="accordion-body">
+                                                    <pre class="bg-dark p-3 rounded" style="max-height: 300px; overflow-y: auto; font-size: 0.8em;"><code>${JSON.stringify(cleanedData, null, 2)}</code></pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                
+                content.innerHTML = html;
+            } else {
+                content.innerHTML = '<div class="alert alert-danger">Error loading record details.</div>';
+            }
+        })
+        .catch(error => {
+            content.innerHTML = '<div class="alert alert-danger">Error loading record details.</div>';
+            console.error('Error:', error);
+        });
+}
+</script>
+{% endblock %}

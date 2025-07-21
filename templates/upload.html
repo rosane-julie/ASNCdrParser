@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Upload CDR File - ASN.1 CDR Parser{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-upload me-2"></i>Upload CDR File
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select CDR File</label>
+                        <input type="file" class="form-control" id="file" name="file" 
+                               accept=".dat,.cdr,.bin,.asn1,.ber,.der" required>
+                        <div class="form-text">
+                            Supported formats: .dat, .cdr, .bin, .asn1, .ber, .der (Max size: 100MB)
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>About CDR Parsing:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>The parser will attempt to decode ASN.1 structures automatically</li>
+                                <li>Common telecom fields (calling/called numbers, duration, timestamps) will be extracted when possible</li>
+                                <li>If standard decoding fails, a raw binary analysis will be performed</li>
+                                <li>Large files may take several minutes to process</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="uploadBtn">
+                            <i class="fas fa-upload me-2"></i>Upload and Parse
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-cog fa-spin me-2"></i>Processing File
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mb-0">Uploading and parsing your CDR file...</p>
+                <p class="text-muted small">This may take a few minutes for large files.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('uploadForm').addEventListener('submit', function(e) {
+    // Show progress modal
+    var progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+    progressModal.show();
+    
+    // Disable the upload button
+    document.getElementById('uploadBtn').disabled = true;
+});
+
+// File size validation
+document.getElementById('file').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (file) {
+        var maxSize = 100 * 1024 * 1024; // 100MB
+        if (file.size > maxSize) {
+            alert('File size exceeds 100MB limit. Please select a smaller file.');
+            e.target.value = '';
+        }
+    }
+});
+</script>
+{% endblock %}
