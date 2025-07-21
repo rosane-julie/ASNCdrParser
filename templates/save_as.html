@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Save As - {{ cdr_file.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-save me-2"></i>Save As New File
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="filename" class="form-label">New File Name</label>
+                        <input type="text" class="form-control" id="filename" name="filename" required
+                               placeholder="example.cdr">
+                        <div class="form-text">
+                            Allowed types: {{ ', '.join(ALLOWED_EXTENSIONS) }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="start_index" class="form-label">Start Record</label>
+                        <input type="number" class="form-control" id="start_index" name="start_index" value="0" min="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="end_index" class="form-label">End Record</label>
+                        <input type="number" class="form-control" id="end_index" name="end_index"
+                               value="{{ cdr_file.records_count - 1 }}" min="0">
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('view_results', file_id=cdr_file.id) }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
