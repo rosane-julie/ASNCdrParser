@@ -499,3 +499,74 @@ def delete_file(file_id):
         flash(f"Error deleting file: {str(e)}", "error")
 
     return redirect(url_for("index"))
+
+
+@app.route("/save_as/<int:file_id>", methods=["GET", "POST"])
+def save_as(file_id):
+    """Save the parsed records to a new file and database entry."""
+    cdr_file = CDRFile.query.get_or_404(file_id)
+
+    if request.method == "POST":
+        new_name = request.form.get("filename", "").strip()
+        if not new_name:
+            flash("Filename is required", "error")
+            return redirect(request.url)
+
+        if not allowed_file(new_name):
+            flash(
+                "Invalid file type. Allowed types: " + ", ".join(ALLOWED_EXTENSIONS),
+                "error",
+            )
+            return redirect(request.url)
+
+        new_filename = secure_filename(new_name)
+        new_path = os.path.join(app.config["UPLOAD_FOLDER"], new_filename)
+        if os.path.exists(new_path):
+            flash("File already exists", "error")
+            return redirect(request.url)
+
+        parser = CDRParser()
+        all_records = (
+            CDRRecord.query.filter_by(file_id=cdr_file.id)
+            .order_by(CDRRecord.record_index)
+            .all()
+        )
+        records_data = []
+        for r in all_records:
+            data = r.get_raw_data()
+            if "calling_number" not in data:
+                data["calling_number"] = r.calling_number
+            records_data.append(data)
+
+        parser.save_records_to_file(new_path, records_data)
+        file_size = os.path.getsize(new_path)
+
+        new_file = CDRFile(
+            filename=new_filename,
+            original_filename=new_filename,
+            file_size=file_size,
+            parse_status="success",
+            records_count=len(records_data),
+        )
+        db.session.add(new_file)
+        db.session.commit()
+
+        for i, r in enumerate(all_records):
+            new_record = CDRRecord(
+                file_id=new_file.id,
+                record_index=i,
+                record_type=r.record_type,
+                calling_number=r.calling_number,
+                called_number=r.called_number,
+                call_duration=r.call_duration,
+                start_time=r.start_time,
+                end_time=r.end_time,
+            )
+            new_record.set_raw_data(r.get_raw_data())
+            db.session.add(new_record)
+
+        db.session.commit()
+        flash(f"File saved as {new_filename}", "success")
+        return redirect(url_for("view_results", file_id=new_file.id))
+
+    return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
