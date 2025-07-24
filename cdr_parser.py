@@ -59,7 +59,7 @@ class CDRParser:
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
 
-    def parse_file_chunk(self, filepath, start_record=0, max_records=1000, offset=0):
+    def parse_file_chunk(self, filepath, start_record=0, max_records=100, offset=0):
         """Parse part of a file starting from ``offset`` and ``start_record``.
 
         Returns ``(records, reached_end, new_offset)``.
