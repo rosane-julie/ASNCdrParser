@@ -9,7 +9,6 @@ from flask import (
     url_for,
     flash,
     jsonify,
-    send_file,
     Response,
 )
 from werkzeug.utils import secure_filename
@@ -575,6 +574,7 @@ def save_as(file_id):
         )
         db.session.add(new_file)
         db.session.commit()
+
         for i, r in enumerate(selected_records):
             new_record = CDRRecord(
                 file_id=new_file.id,
