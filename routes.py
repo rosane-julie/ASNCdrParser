@@ -94,6 +94,7 @@ def upload_file():
                     cdr_file.records_count = len(records)
                     cdr_file.parse_status = "success"
                     cdr_file.parse_offset = new_offset
+
                     db.session.commit()
 
                     flash(
@@ -596,11 +597,10 @@ def save_as(file_id):
         return redirect(url_for("view_results", file_id=new_file.id))
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
-
-
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
     """Parse the next 100 records from the CDR file."""
+
     cdr_file = CDRFile.query.get_or_404(file_id)
     start_index = CDRRecord.query.filter_by(file_id=file_id).count()
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
@@ -610,7 +610,7 @@ def parse_next(file_id):
         filepath,
         start_record=start_index,
         max_records=100,
-        offset=cdr_file.parse_offset,
+
     )
 
     if not records:
