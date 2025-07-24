@@ -13,7 +13,6 @@ class CDRFile(db.Model):
     records_count = db.Column(db.Integer, default=0)
     parse_offset = db.Column(db.Integer, default=0)
     spec_path = db.Column(db.String(255))
-    
     # Relationship to parsed records
     records = db.relationship('CDRRecord', backref='file', lazy=True, cascade='all, delete-orphan')
 

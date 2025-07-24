@@ -11,8 +11,6 @@ SENORA ASN is a web-based tool for parsing telecom Call Detail Records stored in
 - Incremental parsing in batches of 100 records
 - Option to split a selection of records into a new file
 - Faster incremental parsing using stored file offsets
-- Optional parsing using a custom ASN.1 specification for better field mapping
-
 ## Running
 Install dependencies with `pip install -r requirements.txt` or via `poetry install`, then start the app with:
 
@@ -30,3 +28,4 @@ in `specs/sample_decoder.xml`. When uploading a CDR file you may optionally
 upload either an ASN.1 spec or a decoder XML. SENORA ASN will attempt to
 translate basic decoder XML files into an ASN.1 specification so subsequent
 incremental parsing also uses it.
+

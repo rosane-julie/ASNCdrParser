@@ -557,7 +557,9 @@ def save_as(file_id):
         original_path = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
         shutil.copy2(original_path, new_path)
 
+
         parser = CDRParser(spec_path=cdr_file.spec_path, top_type="CallDataRecord")
+
         selected_records = (
             CDRRecord.query.filter_by(file_id=cdr_file.id)
             .filter(CDRRecord.record_index >= start_idx)
