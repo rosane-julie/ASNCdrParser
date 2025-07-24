@@ -37,8 +37,19 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 with app.app_context():
     # Import models and routes
-    import models
-    import routes
-    
+    import models  # noqa: F401
+    import routes  # noqa: F401
+
     # Create all database tables
     db.create_all()
+
+    # Ensure new columns exist for older databases
+    from sqlalchemy import inspect
+
+    inspector = inspect(db.engine)
+    columns = [col["name"] for col in inspector.get_columns("cdr_file")]
+    if "parse_offset" not in columns:
+        db.session.execute(
+            db.text("ALTER TABLE cdr_file ADD COLUMN parse_offset INTEGER DEFAULT 0")
+        )
+        db.session.commit()
