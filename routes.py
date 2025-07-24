@@ -594,7 +594,6 @@ def save_as(file_id):
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
 
-
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
     """Parse the next 1000 records from the CDR file."""

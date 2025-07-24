@@ -39,7 +39,6 @@ with app.app_context():
     # Import models and routes
     import models  # noqa: F401
     import routes  # noqa: F401
-
     # Create all database tables
     db.create_all()
 
