@@ -16,9 +16,9 @@ except Exception:  # pragma: no cover - optional dependency
 class CDRParser:
     """SENORA ASN parser for telecom Call Detail Records"""
 
+
     def __init__(self, spec_path=None, top_type=None):
         """Create a parser optionally using an ASN.1 specification."""
-
         self.logger = logging.getLogger(__name__)
         self.spec = None
         self.top_type = top_type
@@ -75,7 +75,6 @@ class CDRParser:
                 return self.parse_raw_binary_file(filepath)
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
-
     def parse_file_with_spec(self, filepath, offset=0, max_records=None):
         """Parse using a compiled ASN.1 specification.
 
@@ -130,7 +129,6 @@ class CDRParser:
                 offset=offset,
                 max_records=max_records,
             )
-
         records = []
         chunk_size = 10 * 1024 * 1024  # 10MB
         record_index = start_record
@@ -158,7 +156,6 @@ class CDRParser:
                             process_chunk = chunk[:boundary_pos]
                             f.seek(chunk_start + boundary_pos)
                             chunk = process_chunk
-
                     chunk_records = self.parse_binary_data_chunk(chunk, record_index)
                     records.extend(chunk_records)
                     record_index += len(chunk_records)

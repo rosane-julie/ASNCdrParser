@@ -58,3 +58,4 @@ with app.app_context():
             db.text("ALTER TABLE cdr_file ADD COLUMN spec_path VARCHAR(255)")
         )
         db.session.commit()
+

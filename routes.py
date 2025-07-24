@@ -78,6 +78,7 @@ def upload_file():
 
                 # Parse the first chunk of the file for faster feedback
                 parser = CDRParser(spec_path=spec_path, top_type="CallDataRecord")
+
                 try:
                     records, reached_end, new_offset = parser.parse_file_chunk(
                         filepath,
@@ -557,7 +558,7 @@ def save_as(file_id):
         original_path = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
         shutil.copy2(original_path, new_path)
 
-        parser = CDRParser(spec_path=cdr_file.spec_path, top_type="CallDataRecord")
+       parser = CDRParser(spec_path=cdr_file.spec_path, top_type="CallDataRecord")
         selected_records = (
             CDRRecord.query.filter_by(file_id=cdr_file.id)
             .filter(CDRRecord.record_index >= start_idx)
@@ -605,15 +606,15 @@ def save_as(file_id):
         return redirect(url_for("view_results", file_id=new_file.id))
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
-
-
+@app.route("/parse_next/<int:file_id>", methods=["POST"])
+def parse_next(file_id):
+    """Parse the next 100 records from the CDR file."""
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
     """Parse the next 100 records from the CDR file."""
     cdr_file = CDRFile.query.get_or_404(file_id)
     start_index = CDRRecord.query.filter_by(file_id=file_id).count()
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
-
     parser = CDRParser(spec_path=cdr_file.spec_path, top_type="CallDataRecord")
     records, reached_end, new_offset = parser.parse_file_chunk(
         filepath,
