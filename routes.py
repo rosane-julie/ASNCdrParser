@@ -16,6 +16,7 @@ from app import app, db
 from models import CDRFile, CDRRecord
 from cdr_parser import CDRParser
 import shutil
+import tempfile
 import csv
 import io
 
@@ -594,7 +595,6 @@ def save_as(file_id):
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
 
-
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
     """Parse the next 1000 records from the CDR file."""
@@ -609,6 +609,9 @@ def parse_next(file_id):
         max_records=1000,
         offset=cdr_file.parse_offset,
     )
+
+    records, reached_end = parser.parse_file_chunk(filepath, start_record=start_index, max_records=1000)
+
 
     if not records:
         flash("No more records found", "info")
