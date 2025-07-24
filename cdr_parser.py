@@ -75,22 +75,6 @@ class CDRParser:
                 f.seek(offset)
                 while len(records) < max_records:
                     chunk_start = f.tell()
-
-    def parse_file_chunk(self, filepath, start_record=0, max_records=1000):
-        """Parse a portion of a CDR file starting at ``start_record``.
-
-        Returns a tuple ``(records, reached_end)`` where ``records`` is a list
-        of parsed records and ``reached_end`` indicates if the end of the file
-        was reached during parsing.
-        """
-        records = []
-        chunk_size = 10 * 1024 * 1024  # 10MB
-        record_index = 0
-        reached_end = False
-
-        try:
-            with open(filepath, "rb") as f:
-                while len(records) < max_records:
                     chunk = f.read(chunk_size)
                     if not chunk:
                         reached_end = True
@@ -108,10 +92,7 @@ class CDRParser:
                             f.seek(chunk_start + boundary_pos)
                             chunk = process_chunk
 
-                    chunk_records = self.parse_binary_data_chunk(chunk, record_index)
-                    records.extend(chunk_records)
-                    record_index += len(chunk_records)
-                    new_offset = f.tell()
+
                     chunk_records = self.parse_binary_data_chunk(chunk, record_index)
                     for r in chunk_records:
                         if record_index >= start_record and len(records) < max_records:
@@ -119,8 +100,6 @@ class CDRParser:
                         record_index += 1
                         if len(records) >= max_records:
                             break
-                    if len(records) >= max_records:
-                        break
 
         except Exception as e:
             self.logger.error(f"Error processing file chunk: {str(e)}")

@@ -609,10 +609,7 @@ def parse_next(file_id):
         max_records=1000,
         offset=cdr_file.parse_offset,
     )
-
-    records, reached_end = parser.parse_file_chunk(filepath, start_record=start_index, max_records=1000)
-
-
+   
     if not records:
         flash("No more records found", "info")
         return redirect(url_for("view_results", file_id=file_id))
