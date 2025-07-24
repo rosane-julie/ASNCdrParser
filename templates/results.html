@@ -57,6 +57,14 @@
                     <a href="{{ url_for('export_data', file_id=cdr_file.id, format='csv') }}" class="btn btn-outline-primary btn-sm">
                         <i class="fas fa-download me-1"></i>Export CSV
                     </a>
+                    <a href="{{ url_for('save_as', file_id=cdr_file.id) }}" class="btn btn-outline-info btn-sm">
+                        <i class="fas fa-save me-1"></i>Save As
+                    </a>
+                    <form action="{{ url_for('parse_next', file_id=cdr_file.id) }}" method="post" class="d-inline">
+                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-forward me-1"></i>Parse Next 100
+                        </button>
+                    </form>
                 </div>
                 {% endif %}
             </div>
