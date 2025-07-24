@@ -59,7 +59,8 @@ class CDRParser:
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
 
-    def parse_file_chunk(self, filepath, start_record=0, max_records=1000, offset=0):
+    def parse_file_chunk(self, filepath, start_record=0, max_records=100, offset=0):
+
         """Parse part of a file starting from ``offset`` and ``start_record``.
 
         Returns ``(records, reached_end, new_offset)``.
@@ -92,12 +93,11 @@ class CDRParser:
                             f.seek(chunk_start + boundary_pos)
                             chunk = process_chunk
                     chunk_records = self.parse_binary_data_chunk(chunk, record_index)
-                    for r in chunk_records:
-                        if record_index >= start_record and len(records) < max_records:
-                            records.append(r)
-                        record_index += 1
-                        if len(records) >= max_records:
-                            break
+                    records.extend(chunk_records)
+                    record_index += len(chunk_records)
+                    new_offset = f.tell()
+                    if len(records) >= max_records:
+                        break
         except Exception as e:
             self.logger.error(f"Error processing file chunk: {str(e)}")
 

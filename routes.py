@@ -68,10 +68,13 @@ def upload_file():
                 db.session.add(cdr_file)
                 db.session.commit()
 
-                # Parse the file
+                # Parse the first chunk of the file for faster feedback
                 parser = CDRParser()
                 try:
-                    records = parser.parse_file(filepath)
+                    records, reached_end, new_offset = parser.parse_file_chunk(
+                        filepath,
+                        max_records=100,
+                    )
 
                     # Save parsed records to database
                     for i, record in enumerate(records):
@@ -90,11 +93,12 @@ def upload_file():
 
                     cdr_file.records_count = len(records)
                     cdr_file.parse_status = "success"
-                    cdr_file.parse_offset = os.path.getsize(filepath)
+                    cdr_file.parse_offset = new_offset
+
                     db.session.commit()
 
                     flash(
-                        f"File uploaded and parsed successfully. {len(records)} records found.",
+                        f"File uploaded. Parsed {len(records)} records.",
                         "success",
                     )
                     return redirect(url_for("view_results", file_id=cdr_file.id))
@@ -593,10 +597,10 @@ def save_as(file_id):
         return redirect(url_for("view_results", file_id=new_file.id))
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
-
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
-    """Parse the next 1000 records from the CDR file."""
+    """Parse the next 100 records from the CDR file."""
+
     cdr_file = CDRFile.query.get_or_404(file_id)
     start_index = CDRRecord.query.filter_by(file_id=file_id).count()
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], cdr_file.filename)
@@ -605,8 +609,8 @@ def parse_next(file_id):
     records, reached_end, new_offset = parser.parse_file_chunk(
         filepath,
         start_record=start_index,
-        max_records=1000,
-        offset=cdr_file.parse_offset,
+        max_records=100,
+
     )
 
     if not records:

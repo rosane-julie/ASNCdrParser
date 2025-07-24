@@ -8,7 +8,7 @@ SENORA ASN is a web-based tool for parsing telecom Call Detail Records stored in
 - Searchable, sortable tables
 - Export to CSV or JSON
 - "Save As" to create new files from existing records
-- Incremental parsing in batches of 1000 records
+- Incremental parsing in batches of 100 records
 - Option to split a selection of records into a new file
 - Faster incremental parsing using stored file offsets
 
