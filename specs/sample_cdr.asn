@@ -1,0 +1,7 @@
+CDR DEFINITIONS ::= BEGIN
+CallDataRecord ::= SEQUENCE {
+    callingNumber  IA5String,
+    calledNumber   IA5String,
+    callDuration   INTEGER OPTIONAL
+}
+END

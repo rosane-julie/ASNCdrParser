@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<decoder>
+    <field name="callingNumber" description="Originating number"/>
+    <field name="calledNumber" description="Destination number"/>
+    <field name="callDuration" description="Duration in seconds"/>
+</decoder>
