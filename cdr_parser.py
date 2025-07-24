@@ -91,8 +91,6 @@ class CDRParser:
                             process_chunk = chunk[:boundary_pos]
                             f.seek(chunk_start + boundary_pos)
                             chunk = process_chunk
-
-
                     chunk_records = self.parse_binary_data_chunk(chunk, record_index)
                     for r in chunk_records:
                         if record_index >= start_record and len(records) < max_records:
@@ -100,7 +98,6 @@ class CDRParser:
                         record_index += 1
                         if len(records) >= max_records:
                             break
-
         except Exception as e:
             self.logger.error(f"Error processing file chunk: {str(e)}")
 

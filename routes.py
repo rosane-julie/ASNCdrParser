@@ -16,7 +16,6 @@ from app import app, db
 from models import CDRFile, CDRRecord
 from cdr_parser import CDRParser
 import shutil
-import tempfile
 import csv
 import io
 
@@ -609,7 +608,7 @@ def parse_next(file_id):
         max_records=1000,
         offset=cdr_file.parse_offset,
     )
-   
+
     if not records:
         flash("No more records found", "info")
         return redirect(url_for("view_results", file_id=file_id))
