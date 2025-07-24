@@ -9,7 +9,6 @@ from flask import (
     url_for,
     flash,
     jsonify,
-    send_file,
     Response,
 )
 from werkzeug.utils import secure_filename
@@ -596,7 +595,6 @@ def save_as(file_id):
 
     return render_template("save_as.html", cdr_file=cdr_file, ALLOWED_EXTENSIONS=ALLOWED_EXTENSIONS)
 
-
 @app.route("/parse_next/<int:file_id>", methods=["POST"])
 def parse_next(file_id):
     """Parse the next 1000 records from the CDR file."""
@@ -611,7 +609,7 @@ def parse_next(file_id):
         max_records=1000,
         offset=cdr_file.parse_offset,
     )
-
+   
     if not records:
         flash("No more records found", "info")
         return redirect(url_for("view_results", file_id=file_id))

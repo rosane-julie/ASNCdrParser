@@ -3,10 +3,8 @@ import re
 import random
 import logging
 from datetime import datetime
-from pyasn1 import debug
 from pyasn1.codec.der import decoder
 from pyasn1.codec.ber import decoder as ber_decoder
-from pyasn1.type import univ, namedtype, namedval, tag, constraint, useful
 from pyasn1 import error
 
 
@@ -94,18 +92,19 @@ class CDRParser:
                             f.seek(chunk_start + boundary_pos)
                             chunk = process_chunk
 
+
                     chunk_records = self.parse_binary_data_chunk(chunk, record_index)
-                    records.extend(chunk_records)
-                    record_index += len(chunk_records)
-                    new_offset = f.tell()
-                    if len(records) >= max_records:
-                        break
+                    for r in chunk_records:
+                        if record_index >= start_record and len(records) < max_records:
+                            records.append(r)
+                        record_index += 1
+                        if len(records) >= max_records:
+                            break
 
         except Exception as e:
             self.logger.error(f"Error processing file chunk: {str(e)}")
 
         return records, reached_end, new_offset
-
     def parse_binary_data(self, data):
         """Parse binary ASN.1 data and extract CDR records"""
         records = []
@@ -206,7 +205,7 @@ class CDRParser:
                             )
                         else:
                             result[f"component_{idx}"] = self.asn1_to_dict(component)
-                except:
+                except Exception:
                     # Fallback to simple value
                     return str(asn1_object)
                 return result
@@ -247,7 +246,7 @@ class CDRParser:
                     duration = (timestamps[1] - timestamps[0]).total_seconds()
                     if duration > 0:
                         record["call_duration"] = int(duration)
-                except:
+                except Exception:
                     pass
         elif len(timestamps) == 1:
             record["start_time"] = timestamps[0]
@@ -519,7 +518,7 @@ class CDRParser:
                     # Limit total records to prevent memory issues
                     if len(records) > 10000:
                         self.logger.warning(
-                            f"Limiting parsing to first 10000 records for performance"
+                            "Limiting parsing to first 10000 records for performance"
                         )
                         break
 
@@ -575,7 +574,7 @@ class CDRParser:
                 else:
                     offset += consumed
 
-            except (error.PyAsn1Error, OverflowError, ValueError) as e:
+            except (error.PyAsn1Error, OverflowError, ValueError):
                 # Try BER decoder as fallback
                 try:
                     remaining = data[offset:]
@@ -1112,7 +1111,7 @@ class CDRParser:
                         if len(bcd_numbers) >= 1000:
                             break
 
-            except:
+            except Exception:
                 continue
 
         return list(set(bcd_numbers))  # Remove duplicates
@@ -1259,7 +1258,7 @@ class CDRParser:
                     duration = int.from_bytes(chunk4, "big")
                     if 1 <= duration <= 7200:
                         durations.append(duration)
-            except:
+            except Exception:
                 continue
 
         # Generate realistic durations if none found
