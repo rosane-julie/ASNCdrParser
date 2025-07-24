@@ -15,10 +15,19 @@
                 <form method="POST" enctype="multipart/form-data" id="uploadForm">
                     <div class="mb-3">
                         <label for="file" class="form-label">Select CDR File</label>
-                        <input type="file" class="form-control" id="file" name="file" 
+                        <input type="file" class="form-control" id="file" name="file"
                                accept=".dat,.cdr,.bin,.asn1,.ber,.der" required>
                         <div class="form-text">
                             Supported formats: .dat, .cdr, .bin, .asn1, .ber, .der (Max size: 100MB)
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="spec_file" class="form-label">ASN.1 Spec (optional)</label>
+                        <input type="file" class="form-control" id="spec_file" name="spec_file"
+                               accept=".asn,.asn1,.xml">
+                        <div class="form-text">
+                            Provide a decoder XML or ASN.1 file for better mapping
                         </div>
                     </div>
                     

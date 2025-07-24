@@ -39,6 +39,7 @@ with app.app_context():
     # Import models and routes
     import models  # noqa: F401
     import routes  # noqa: F401
+
     # Create all database tables
     db.create_all()
 
@@ -52,3 +53,9 @@ with app.app_context():
             db.text("ALTER TABLE cdr_file ADD COLUMN parse_offset INTEGER DEFAULT 0")
         )
         db.session.commit()
+    if "spec_path" not in columns:
+        db.session.execute(
+            db.text("ALTER TABLE cdr_file ADD COLUMN spec_path VARCHAR(255)")
+        )
+        db.session.commit()
+

@@ -7,12 +7,26 @@ from pyasn1.codec.der import decoder
 from pyasn1.codec.ber import decoder as ber_decoder
 from pyasn1 import error
 
+try:
+    import asn1tools
+except Exception:  # pragma: no cover - optional dependency
+    asn1tools = None
+
 
 class CDRParser:
     """SENORA ASN parser for telecom Call Detail Records"""
 
-    def __init__(self):
+
+    def __init__(self, spec_path=None, top_type=None):
+        """Create a parser optionally using an ASN.1 specification."""
         self.logger = logging.getLogger(__name__)
+        self.spec = None
+        self.top_type = top_type
+        if spec_path and asn1tools:
+            try:
+                self.spec = asn1tools.compile_files(spec_path, "ber")
+            except Exception as exc:  # pragma: no cover - best effort
+                self.logger.error(f"Failed to load ASN.1 spec {spec_path}: {exc}")
 
     def parse_timestamp_from_filename(self, filename):
         """Extract a timestamp from a filename if present.
@@ -32,6 +46,9 @@ class CDRParser:
     def parse_file(self, filepath):
         """Parse a CDR file and return a list of records"""
         try:
+            if self.spec and self.top_type:
+                return self.parse_file_with_spec(filepath)
+
             # Check file size first
             file_size = os.path.getsize(filepath)
             self.logger.info(f"Processing file {filepath} of size {file_size} bytes")
@@ -58,13 +75,60 @@ class CDRParser:
                 return self.parse_raw_binary_file(filepath)
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
+    def parse_file_with_spec(self, filepath, offset=0, max_records=None):
+        """Parse using a compiled ASN.1 specification.
+
+        Parameters
+        ----------
+        filepath: str
+            Path to the file to parse.
+        offset: int, optional
+            Byte offset to start reading from.
+        max_records: int, optional
+            Maximum number of records to decode.
+        """
+        records: list[dict] = []
+        if not (self.spec and self.top_type):
+            return self.parse_file(filepath)
+
+        try:
+            with open(filepath, "rb") as f:
+                f.seek(offset)
+                data = f.read()
+
+            consumed = 0
+            while consumed < len(data):
+                try:
+                    decoded, rest = self.spec.decode(
+                        self.top_type,
+                        data[consumed:],
+                        check_constraints=False,
+                    )
+                    records.append(self.asn1_to_dict(decoded))
+                    consumed = len(data) - len(rest)
+                    if max_records and len(records) >= max_records:
+                        break
+                except Exception as exc:
+                    self.logger.debug(f"Spec decode error at {offset + consumed}: {exc}")
+                    break
+        except Exception as exc:
+            self.logger.error(f"Failed to parse with spec: {exc}")
+
+        new_offset = offset + consumed
+        reached_end = consumed >= len(data)
+        return records, reached_end, new_offset
 
     def parse_file_chunk(self, filepath, start_record=0, max_records=100, offset=0):
-
         """Parse part of a file starting from ``offset`` and ``start_record``.
 
         Returns ``(records, reached_end, new_offset)``.
         """
+        if self.spec and self.top_type:
+            return self.parse_file_with_spec(
+                filepath,
+                offset=offset,
+                max_records=max_records,
+            )
         records = []
         chunk_size = 10 * 1024 * 1024  # 10MB
         record_index = start_record
@@ -98,10 +162,12 @@ class CDRParser:
                     new_offset = f.tell()
                     if len(records) >= max_records:
                         break
+
         except Exception as e:
             self.logger.error(f"Error processing file chunk: {str(e)}")
 
         return records, reached_end, new_offset
+
     def parse_binary_data(self, data):
         """Parse binary ASN.1 data and extract CDR records"""
         records = []

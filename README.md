@@ -20,3 +20,11 @@ python main.py
 ```
 
 The application will be available at `http://localhost:5000`.
+
+### ASN.1 specification
+
+For more accurate decoding you can provide an ASN.1 specification. A simple
+example is included in `specs/sample_cdr.asn` with a matching XML description
+in `specs/sample_decoder.xml`. When uploading a CDR file you may optionally
+upload the ASN.1 spec to map fields exactly. The uploaded spec path is stored so
+subsequent incremental parsing also uses it.
