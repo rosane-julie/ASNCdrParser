@@ -9,7 +9,6 @@ from flask import (
     url_for,
     flash,
     jsonify,
-    send_file,
     Response,
 )
 from werkzeug.utils import secure_filename
@@ -17,7 +16,6 @@ from app import app, db
 from models import CDRFile, CDRRecord
 from cdr_parser import CDRParser
 import shutil
-import tempfile
 import csv
 import io
 
