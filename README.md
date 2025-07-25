@@ -30,3 +30,4 @@ in `specs/sample_decoder.xml`. When uploading a CDR file you may optionally
 upload either an ASN.1 spec or a decoder XML. SENORA ASN will attempt to
 translate basic decoder XML files into an ASN.1 specification so subsequent
 incremental parsing also uses it.
+
