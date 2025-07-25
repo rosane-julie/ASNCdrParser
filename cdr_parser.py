@@ -21,7 +21,6 @@ except Exception:  # pragma: no cover - optional dependency
 class CDRParser:
     """SENORA ASN parser for telecom Call Detail Records"""
 
-
     def __init__(self, spec_path=None, top_type=None):
         """Create a parser optionally using an ASN.1 specification."""
 
@@ -250,6 +249,101 @@ class CDRParser:
         return records, reached_end, new_offset
 
     def parse_file_chunk(self, filepath, start_record=0, max_records=100, offset=0):
+        """Parse part of a file starting from ``offset`` and ``start_record``.
+
+        Returns ``(records, reached_end, new_offset)``.
+        """
+        if self.spec and self.top_type:
+            return self.parse_file_with_spec(
+                filepath,
+                offset=offset,
+                max_records=max_records,
+            )
+
+        records = []
+        chunk_size = 10 * 1024 * 1024  # 10MB
+        record_index = start_record
+        reached_end = False
+        new_offset = offset
+
+        try:
+            with open(filepath, "rb") as f:
+                f.seek(offset)
+                while len(records) < max_records:
+                    chunk_start = f.tell()
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        reached_end = True
+                        break
+
+                    if len(chunk) == chunk_size:
+                        boundary_search = chunk[-1024:]
+                        boundary_pos = -1
+                        for i in range(len(boundary_search) - 1, 0, -1):
+                            if boundary_search[i] in [0x30, 0x31, 0x02, 0x04]:
+                                boundary_pos = len(chunk) - len(boundary_search) + i
+                                break
+                        if boundary_pos > 0:
+                            process_chunk = chunk[:boundary_pos]
+                            f.seek(chunk_start + boundary_pos)
+                            chunk = process_chunk
+
+                    chunk_records = self.parse_binary_data_chunk(chunk, record_index)
+                    records.extend(chunk_records)
+                    record_index += len(chunk_records)
+                    new_offset = f.tell()
+                    if len(records) >= max_records:
+                        break
+
+        except Exception as e:
+            self.logger.error(f"Error processing file chunk: {str(e)}")
+
+        return records, reached_end, new_offset
+
+    def parse_file_with_spec(self, filepath, offset=0, max_records=None):
+        """Parse using a compiled ASN.1 specification.
+
+        Parameters
+        ----------
+        filepath: str
+            Path to the file to parse.
+        offset: int, optional
+            Byte offset to start reading from.
+        max_records: int, optional
+            Maximum number of records to decode.
+        """
+        records: list[dict] = []
+        if not (self.spec and self.top_type):
+            return self.parse_file(filepath)
+
+        try:
+            with open(filepath, "rb") as f:
+                f.seek(offset)
+                data = f.read()
+
+            consumed = 0
+            while consumed < len(data):
+                try:
+                    decoded, rest = self.spec.decode(
+                        self.top_type,
+                        data[consumed:],
+                        check_constraints=False,
+                    )
+                    records.append(self.asn1_to_dict(decoded))
+                    consumed = len(data) - len(rest)
+                    if max_records and len(records) >= max_records:
+                        break
+                except Exception as exc:
+                    self.logger.debug(f"Spec decode error at {offset + consumed}: {exc}")
+                    break
+        except Exception as exc:
+            self.logger.error(f"Failed to parse with spec: {exc}")
+
+        new_offset = offset + consumed
+        reached_end = consumed >= len(data)
+        return records, reached_end, new_offset
+
+    def parse_file_chunk(self, filepath, start_record=0, max_records=1000, offset=0):
         """Parse part of a file starting from ``offset`` and ``start_record``.
 
         Returns ``(records, reached_end, new_offset)``.
