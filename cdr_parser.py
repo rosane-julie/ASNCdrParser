@@ -3,18 +3,64 @@ import re
 import random
 import logging
 from datetime import datetime
-from pyasn1 import debug
 from pyasn1.codec.der import decoder
 from pyasn1.codec.ber import decoder as ber_decoder
-from pyasn1.type import univ, namedtype, namedval, tag, constraint, useful
 from pyasn1 import error
+
+try:
+    import asn1tools
+except Exception:  # pragma: no cover - optional dependency
+    asn1tools = None
+
+try:
+    import xml.etree.ElementTree as ET
+except Exception:  # pragma: no cover - optional dependency
+    ET = None
 
 
 class CDRParser:
-    """ASN.1 CDR Parser for telecom Call Detail Records"""
+    """SENORA ASN parser for telecom Call Detail Records"""
 
-    def __init__(self):
+    def __init__(self, spec_path=None, top_type=None):
+        """Create a parser optionally using an ASN.1 specification."""
+
         self.logger = logging.getLogger(__name__)
+        self.spec = None
+        self.top_type = top_type
+        if spec_path and asn1tools:
+            try:
+                if spec_path.lower().endswith(".xml") and ET is not None:
+                    self.spec, self.top_type = self._load_xml_spec(spec_path)
+                else:
+                    self.spec = asn1tools.compile_files(spec_path, "ber")
+            except Exception as exc:  # pragma: no cover - best effort
+                self.logger.error(f"Failed to load ASN.1 spec {spec_path}: {exc}")
+
+    def _load_xml_spec(self, xml_path):
+        """Convert a simple decoder XML to an ASN.1 spec."""
+        if ET is None:
+            raise RuntimeError("XML support not available")
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+            fields = [f.get("name") for f in root.findall(".//field") if f.get("name")]
+            if not fields:
+                raise ValueError("No field names found in decoder XML")
+
+            asn_lines = ["DECODER DEFINITIONS ::= BEGIN", "Record ::= SEQUENCE {"]
+            for idx, name in enumerate(fields):
+                line = f"    {name} IA5String OPTIONAL"
+                if idx < len(fields) - 1:
+                    line += ","
+                asn_lines.append(line)
+            asn_lines.append("}")
+            asn_lines.append("END")
+            asn_text = "\n".join(asn_lines)
+            spec = asn1tools.compile_string(asn_text, "ber")
+            return spec, "Record"
+        except Exception as exc:  # pragma: no cover - best effort
+            self.logger.error(f"Failed to load XML spec {xml_path}: {exc}")
+            raise
 
     def parse_timestamp_from_filename(self, filename):
         """Extract a timestamp from a filename if present.
@@ -34,18 +80,27 @@ class CDRParser:
     def parse_file(self, filepath):
         """Parse a CDR file and return a list of records"""
         try:
+            if self.spec and self.top_type:
+                return self.parse_file_with_spec(filepath)
+
             # Check file size first
             file_size = os.path.getsize(filepath)
             self.logger.info(f"Processing file {filepath} of size {file_size} bytes")
 
-            # For files larger than 1MB, use enhanced BCD parsing directly
-            if file_size > 1024 * 1024:  # 1MB
-                self.logger.info("Large file detected - using enhanced BCD parsing")
+            # Very large files are parsed in chunks to avoid memory issues
+            if file_size > 10 * 1024 * 1024:  # >10MB
+                self.logger.info("Large file detected - using chunked parser")
+                return self.parse_large_file(filepath)
+
+            # Medium sized files use the raw binary parser for speed
+            if file_size > 1024 * 1024:  # >1MB
+                self.logger.info("Medium file detected - using enhanced BCD parsing")
                 return self.parse_raw_binary_file(filepath)
-            else:
-                with open(filepath, "rb") as f:
-                    data = f.read()
-                return self.parse_binary_data(data)
+
+            # Small files are loaded entirely in memory
+            with open(filepath, "rb") as f:
+                data = f.read()
+            return self.parse_binary_data(data)
 
         except Exception as e:
             self.logger.error(f"Error reading file {filepath}: {str(e)}")
@@ -54,6 +109,101 @@ class CDRParser:
                 return self.parse_raw_binary_file(filepath)
             except Exception:
                 raise Exception(f"Failed to read file: {str(e)}")
+
+    def parse_file_with_spec(self, filepath, offset=0, max_records=None):
+        """Parse using a compiled ASN.1 specification.
+
+        Parameters
+        ----------
+        filepath: str
+            Path to the file to parse.
+        offset: int, optional
+            Byte offset to start reading from.
+        max_records: int, optional
+            Maximum number of records to decode.
+        """
+        records: list[dict] = []
+        if not (self.spec and self.top_type):
+            return self.parse_file(filepath)
+
+        try:
+            with open(filepath, "rb") as f:
+                f.seek(offset)
+                data = f.read()
+
+            consumed = 0
+            while consumed < len(data):
+                try:
+                    decoded, rest = self.spec.decode(
+                        self.top_type,
+                        data[consumed:],
+                        check_constraints=False,
+                    )
+                    records.append(self.asn1_to_dict(decoded))
+                    consumed = len(data) - len(rest)
+                    if max_records and len(records) >= max_records:
+                        break
+                except Exception as exc:
+                    self.logger.debug(f"Spec decode error at {offset + consumed}: {exc}")
+                    break
+        except Exception as exc:
+            self.logger.error(f"Failed to parse with spec: {exc}")
+
+        new_offset = offset + consumed
+        reached_end = consumed >= len(data)
+        return records, reached_end, new_offset
+
+    def parse_file_chunk(self, filepath, start_record=0, max_records=1000, offset=0):
+        """Parse part of a file starting from ``offset`` and ``start_record``.
+
+        Returns ``(records, reached_end, new_offset)``.
+        """
+        if self.spec and self.top_type:
+            return self.parse_file_with_spec(
+                filepath,
+                offset=offset,
+                max_records=max_records,
+            )
+
+        records = []
+        chunk_size = 10 * 1024 * 1024  # 10MB
+        record_index = start_record
+        reached_end = False
+        new_offset = offset
+
+        try:
+            with open(filepath, "rb") as f:
+                f.seek(offset)
+                while len(records) < max_records:
+                    chunk_start = f.tell()
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        reached_end = True
+                        break
+
+                    if len(chunk) == chunk_size:
+                        boundary_search = chunk[-1024:]
+                        boundary_pos = -1
+                        for i in range(len(boundary_search) - 1, 0, -1):
+                            if boundary_search[i] in [0x30, 0x31, 0x02, 0x04]:
+                                boundary_pos = len(chunk) - len(boundary_search) + i
+                                break
+                        if boundary_pos > 0:
+                            process_chunk = chunk[:boundary_pos]
+                            f.seek(chunk_start + boundary_pos)
+                            chunk = process_chunk
+
+                    chunk_records = self.parse_binary_data_chunk(chunk, record_index)
+                    records.extend(chunk_records)
+                    record_index += len(chunk_records)
+                    new_offset = f.tell()
+                    if len(records) >= max_records:
+                        break
+
+        except Exception as e:
+            self.logger.error(f"Error processing file chunk: {str(e)}")
+
+        return records, reached_end, new_offset
 
     def parse_binary_data(self, data):
         """Parse binary ASN.1 data and extract CDR records"""
@@ -155,7 +305,7 @@ class CDRParser:
                             )
                         else:
                             result[f"component_{idx}"] = self.asn1_to_dict(component)
-                except:
+                except Exception:
                     # Fallback to simple value
                     return str(asn1_object)
                 return result
@@ -196,7 +346,7 @@ class CDRParser:
                     duration = (timestamps[1] - timestamps[0]).total_seconds()
                     if duration > 0:
                         record["call_duration"] = int(duration)
-                except:
+                except Exception:
                     pass
         elif len(timestamps) == 1:
             record["start_time"] = timestamps[0]
@@ -468,7 +618,7 @@ class CDRParser:
                     # Limit total records to prevent memory issues
                     if len(records) > 10000:
                         self.logger.warning(
-                            f"Limiting parsing to first 10000 records for performance"
+                            "Limiting parsing to first 10000 records for performance"
                         )
                         break
 
@@ -524,7 +674,7 @@ class CDRParser:
                 else:
                     offset += consumed
 
-            except (error.PyAsn1Error, OverflowError, ValueError) as e:
+            except (error.PyAsn1Error, OverflowError, ValueError):
                 # Try BER decoder as fallback
                 try:
                     remaining = data[offset:]
@@ -1061,7 +1211,7 @@ class CDRParser:
                         if len(bcd_numbers) >= 1000:
                             break
 
-            except:
+            except Exception:
                 continue
 
         return list(set(bcd_numbers))  # Remove duplicates
@@ -1208,7 +1358,7 @@ class CDRParser:
                     duration = int.from_bytes(chunk4, "big")
                     if 1 <= duration <= 7200:
                         durations.append(duration)
-            except:
+            except Exception:
                 continue
 
         # Generate realistic durations if none found
