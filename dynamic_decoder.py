@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import xmltodict
-from pyasn1.type import univ, char, namedtype
+from pyasn1.type import univ, char, namedtype, base
 from pyasn1.codec.ber import decoder as ber_decoder
 
 
@@ -18,11 +18,11 @@ ASN1_TYPE_MAP: Dict[str, Any] = {
 }
 
 
-def _build_schema(node: Dict[str, Any]) -> Tuple[univ.Asn1Item, List[str]]:
+def _build_schema(node: Dict[str, Any]) -> Tuple[base.Asn1Item, List[str]]:
     """Recursively build a pyasn1 schema from a decoded XML node."""
     field_names: List[str] = []
 
-    def build(node: Dict[str, Any]) -> univ.Asn1Item:
+    def build(node: Dict[str, Any]) -> base.Asn1Item:
         if "sequence" in node:
             container = node["sequence"]
             asn1_obj = univ.Sequence()
@@ -65,7 +65,7 @@ def _build_schema(node: Dict[str, Any]) -> Tuple[univ.Asn1Item, List[str]]:
     return schema, field_names
 
 
-def parse_xml_spec(xml_content: str) -> Tuple[univ.Asn1Item, List[str]]:
+def parse_xml_spec(xml_content: str) -> Tuple[base.Asn1Item, List[str]]:
     """Parse decoder XML into a pyasn1 schema."""
     logger = logging.getLogger(__name__)
     if xml_content.strip().startswith("<"):
