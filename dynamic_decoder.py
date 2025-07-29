@@ -65,6 +65,7 @@ def _build_schema(node: Dict[str, Any]) -> Tuple[Any, List[str]]:
     return schema, field_names
 
 
+
 def parse_xml_spec(xml_content: str) -> Tuple[Any, List[str]]:
     """Parse decoder XML into a pyasn1 schema."""
     logger = logging.getLogger(__name__)
