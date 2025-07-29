@@ -14,7 +14,10 @@ SENORA ASN is a web-based tool for parsing telecom Call Detail Records stored in
 - Optional parsing using a custom ASN.1 specification for better field mapping
 
 ## Running
-Install dependencies with `pip install -r requirements.txt` or via `poetry install`, then start the app with:
+Install dependencies with `pip install -r requirements.txt` or via `poetry install`.
+The `requirements.txt` file lists all packages used by the app, including
+`xmltodict`, which is required for decoder functionality. After installing,
+start the app with:
 
 ```bash
 python main.py
