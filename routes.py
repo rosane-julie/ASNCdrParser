@@ -16,6 +16,7 @@ from app import app, db
 from models import CDRFile, CDRRecord
 from cdr_parser import CDRParser
 from decoder_util import decode_cdr
+from dynamic_decoder import decode_cdr as decode_cdr_dynamic
 import shutil
 import csv
 import io
@@ -46,6 +47,24 @@ def upload_cdr_api():
     try:
         records = decode_cdr(cdr_bytes, xml_content)
     except Exception as exc:
+        logging.error("Failed to decode CDR: %s", exc)
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"records": records})
+
+
+@app.route("/decode-cdr", methods=["POST"])
+def decode_cdr_endpoint():
+    """Decode a CDR file using an uploaded decoder XML and return JSON."""
+    if "cdr_file" not in request.files or "xml_spec" not in request.files:
+        return jsonify({"error": "cdr_file and xml_spec are required"}), 400
+
+    cdr_bytes = request.files["cdr_file"].read()
+    xml_content = request.files["xml_spec"].read().decode("utf-8", errors="ignore")
+
+    try:
+        records = decode_cdr_dynamic(cdr_bytes, xml_content)
+    except Exception as exc:  # pragma: no cover - best effort
         logging.error("Failed to decode CDR: %s", exc)
         return jsonify({"error": str(exc)}), 400
 
