@@ -61,9 +61,6 @@ class CDRParser:
         except Exception as exc:  # pragma: no cover - best effort
             self.logger.error(f"Failed to load XML spec {xml_path}: {exc}")
             raise
-                self.spec = asn1tools.compile_files(spec_path, "ber")
-            except Exception as exc:  # pragma: no cover - best effort
-                self.logger.error(f"Failed to load ASN.1 spec {spec_path}: {exc}")
 
     def parse_timestamp_from_filename(self, filename):
         """Extract a timestamp from a filename if present.
