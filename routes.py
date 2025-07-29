@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 from app import app, db
 from models import CDRFile, CDRRecord
 from cdr_parser import CDRParser
+from decoder_util import decode_cdr
 import shutil
 import csv
 import io
@@ -31,6 +32,24 @@ def index():
     # Get recent files
     recent_files = CDRFile.query.order_by(CDRFile.upload_time.desc()).limit(10).all()
     return render_template("index.html", recent_files=recent_files)
+
+
+@app.route("/upload-cdr", methods=["POST"])
+def upload_cdr_api():
+    """API endpoint to decode a CDR file using an XML specification."""
+    if "cdr_file" not in request.files or "xml_spec" not in request.files:
+        return jsonify({"error": "cdr_file and xml_spec are required"}), 400
+
+    cdr_bytes = request.files["cdr_file"].read()
+    xml_content = request.files["xml_spec"].read().decode("utf-8", errors="ignore")
+
+    try:
+        records = decode_cdr(cdr_bytes, xml_content)
+    except Exception as exc:
+        logging.error("Failed to decode CDR: %s", exc)
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"records": records})
 
 
 @app.route("/upload", methods=["GET", "POST"])
