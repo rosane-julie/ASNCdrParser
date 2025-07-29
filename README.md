@@ -34,3 +34,35 @@ upload either an ASN.1 spec or a decoder XML. SENORA ASN will attempt to
 translate basic decoder XML files into an ASN.1 specification so subsequent
 incremental parsing also uses it.
 
+### Dynamic Decoder API
+
+The `/decode-cdr` route provides a programmatic way to decode CDR files without storing them in the database. Submit a `POST` request with the following multipart form fields:
+
+- `cdr_file` – the binary CDR file.
+- `xml_spec` – a decoder XML describing the record layout.
+
+The response is JSON containing a list of records under the key `records`. Each record includes any recognised fields such as `calling_number`, `called_number`, `duration` and timestamp values along with a `raw` object of the full decoded structure.
+
+Example using the provided `specs/sample_decoder.xml`:
+
+```bash
+curl -X POST \
+  -F "cdr_file=@uploads/test_cdr.dat" \
+  -F "xml_spec=@specs/sample_decoder.xml" \
+  http://localhost:5000/decode-cdr
+```
+
+A successful response will look similar to:
+
+```json
+{
+  "records": [
+    {
+      "calling_number": "...",
+      "called_number": "...",
+      "duration": 30,
+      "raw": { "callingNumber": "...", "calledNumber": "...", "callDuration": "30" }
+    }
+  ]
+}
+```
