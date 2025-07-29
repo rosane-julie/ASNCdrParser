@@ -25,6 +25,14 @@ python main.py
 
 The application will be available at `http://localhost:5000`.
 
+## Tests
+
+Run the automated unit tests with [pytest](https://docs.pytest.org/).
+
+```bash
+pytest
+```
+
 ### ASN.1 specification
 
 For more accurate decoding you can provide an ASN.1 specification. A simple

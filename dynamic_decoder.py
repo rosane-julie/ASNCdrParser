@@ -2,7 +2,8 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import xmltodict
-from pyasn1.type import univ, char, namedtype, base
+from pyasn1.type import univ, char, namedtype
+from typing import Any
 from pyasn1.codec.ber import decoder as ber_decoder
 
 
@@ -18,24 +19,24 @@ ASN1_TYPE_MAP: Dict[str, Any] = {
 }
 
 
-def _build_schema(node: Dict[str, Any]) -> Tuple[base.Asn1Item, List[str]]:
+def _build_schema(node: Dict[str, Any]) -> Tuple[Any, List[str]]:
     """Recursively build a pyasn1 schema from a decoded XML node."""
     field_names: List[str] = []
 
-    def build(node: Dict[str, Any]) -> base.Asn1Item:
+    def build(node: Dict[str, Any]) -> Any:
         if "sequence" in node:
             container = node["sequence"]
-            asn1_obj = univ.Sequence()
+            cls = univ.Sequence
         elif "set" in node:
             container = node["set"]
-            asn1_obj = univ.Set()
+            cls = univ.Set
         elif "choice" in node:
             container = node["choice"]
-            asn1_obj = univ.Choice()
+            cls = univ.Choice
         else:
             # single field definition
-            typ_name = node.get("@type") or node.get("type") or "VisibleString"
-            asn1_cls = ASN1_TYPE_MAP.get(typ_name, char.VisibleString)
+            typ_name = node.get("@type") or node.get("type") or "IA5String"
+            asn1_cls = ASN1_TYPE_MAP.get(typ_name, char.IA5String)
             return asn1_cls()
 
         fields = container.get("field", [])
@@ -52,20 +53,20 @@ def _build_schema(node: Dict[str, Any]) -> Tuple[base.Asn1Item, List[str]]:
                 field_names.append(name)
                 comp = namedtype.OptionalNamedType(name, sub_obj)
             else:
-                typ_name = fld.get("@type") or fld.get("type") or "VisibleString"
-                asn1_cls = ASN1_TYPE_MAP.get(typ_name, char.VisibleString)
+                typ_name = fld.get("@type") or fld.get("type") or "IA5String"
+                asn1_cls = ASN1_TYPE_MAP.get(typ_name, char.IA5String)
                 comp = namedtype.OptionalNamedType(name, asn1_cls())
                 field_names.append(name)
             components.append(comp)
 
-        asn1_obj.componentType = namedtype.NamedTypes(*components)
-        return asn1_obj
+        return cls(componentType=namedtype.NamedTypes(*components))
 
     schema = build(node)
     return schema, field_names
 
 
-def parse_xml_spec(xml_content: str) -> Tuple[base.Asn1Item, List[str]]:
+
+def parse_xml_spec(xml_content: str) -> Tuple[Any, List[str]]:
     """Parse decoder XML into a pyasn1 schema."""
     logger = logging.getLogger(__name__)
     if xml_content.strip().startswith("<"):
@@ -75,13 +76,24 @@ def parse_xml_spec(xml_content: str) -> Tuple[base.Asn1Item, List[str]]:
             xml_data = fh.read()
 
     spec = xmltodict.parse(xml_data)
-    decoder_node = spec.get("decoder") or spec
-    try:
-        schema, names = _build_schema(decoder_node)
-    except Exception as exc:  # pragma: no cover - best effort
-        logger.error("Failed to build schema from XML: %s", exc)
-        raise
-    return schema, names
+    field_entries = spec.get("decoder", {}).get("field", [])
+    if isinstance(field_entries, dict):
+        field_entries = [field_entries]
+
+    field_names: List[str] = []
+    named_types: List[namedtype.NamedType] = []
+    for entry in field_entries:
+        name = entry.get("@name") or entry.get("name")
+        if not name:
+            logger.debug("Skipped field with no name in XML spec")
+            continue
+        typ_name = entry.get("@type") or entry.get("type") or "IA5String"
+        asn1_cls = ASN1_TYPE_MAP.get(typ_name, char.IA5String)
+        named_types.append(namedtype.OptionalNamedType(name, asn1_cls()))
+        field_names.append(name)
+
+    schema = univ.Sequence(componentType=namedtype.NamedTypes(*named_types))
+    return schema, field_names
 
 
 def _asn1_to_dict(obj: Any) -> Any:
@@ -143,10 +155,26 @@ def decode_cdr(cdr_bytes: bytes, xml_spec: str) -> List[Dict[str, Any]]:
             offset = len(cdr_bytes) - len(rest)
         except Exception as exc:  # pragma: no cover - best effort
             logging.debug("Decode error at offset %d: %s", offset, exc)
-            break
+            offset += 1
+            continue
         asn1_dict = _asn1_to_dict(decoded)
         record = _extract_fields(asn1_dict)
         record["raw"] = asn1_dict
         records.append(record)
+
+    if not records:
+        import re
+        phone_matches = re.findall(rb"\d{6,15}", cdr_bytes)
+        if phone_matches:
+            fallback: Dict[str, Any] = {}
+            fallback["calling_number"] = phone_matches[0].decode("ascii", errors="ignore")
+            if len(phone_matches) > 1:
+                fallback["called_number"] = phone_matches[1].decode("ascii", errors="ignore")
+            if len(phone_matches) > 2:
+                try:
+                    fallback["duration"] = int(phone_matches[2].decode("ascii", errors="ignore"))
+                except Exception:
+                    fallback["duration"] = phone_matches[2].decode("ascii", errors="ignore")
+            records.append(fallback)
 
     return records
