@@ -30,26 +30,33 @@ $(document).ready(function() {
     }, 5000);
     
     // File upload validation
-    $('input[type="file"]').on('change', function() {
-        var file = this.files[0];
-        if (file) {
-            var maxSize = 100 * 1024 * 1024; // 100MB
-            if (file.size > maxSize) {
-                alert('File size exceeds 100MB limit. Please select a smaller file.');
-                $(this).val('');
-                return false;
-            }
-            
-            // Check file extension
-            var allowedExtensions = ['dat', 'cdr', 'bin', 'asn1', 'ber', 'der'];
-            var fileExtension = file.name.split('.').pop().toLowerCase();
-            
-            if (allowedExtensions.indexOf(fileExtension) === -1) {
-                alert('Invalid file type. Allowed extensions: ' + allowedExtensions.join(', '));
-                $(this).val('');
-                return false;
-            }
+    function validateUpload(input, allowedExtensions) {
+        var file = input.files[0];
+        if (!file) {
+            return;
         }
+
+        var maxSize = 100 * 1024 * 1024; // 100MB
+        if (file.size > maxSize) {
+            alert('File size exceeds 100MB limit. Please select a smaller file.');
+            $(input).val('');
+            return false;
+        }
+
+        var fileExtension = file.name.split('.').pop().toLowerCase();
+        if (allowedExtensions.indexOf(fileExtension) === -1) {
+            alert('Invalid file type. Allowed extensions: ' + allowedExtensions.join(', '));
+            $(input).val('');
+            return false;
+        }
+    }
+
+    $('#file').on('change', function() {
+        validateUpload(this, ['dat', 'cdr', 'bin', 'asn1', 'ber', 'der']);
+    });
+
+    $('#spec_file').on('change', function() {
+        validateUpload(this, ['asn', 'asn1', 'xml']);
     });
     
     // Confirm delete actions
