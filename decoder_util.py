@@ -27,7 +27,7 @@ def decode_cdr(cdr_bytes: bytes, xml_spec: str) -> List[Dict[str, Any]]:
 
     field_names = []
     for entry in field_entries:
-        name = entry.get("name")
+        name = entry.get("name") or entry.get("@name")
         if name:
             field_names.append(name)
         else:
@@ -50,8 +50,9 @@ def decode_cdr(cdr_bytes: bytes, xml_spec: str) -> List[Dict[str, Any]]:
     data = cdr_bytes
     while offset < len(data):
         try:
-            decoded, rest = compiled.decode("Record", data[offset:], check_constraints=False)
-            offset = len(data) - len(rest)
+            decoded = compiled.decode("Record", data[offset:], check_constraints=False)
+            consumed = len(compiled.encode("Record", decoded))
+            offset += consumed
         except Exception as exc:  # pragma: no cover - best effort
             logger.warning("Decode error at offset %d: %s", offset, exc)
             break
